@@ -901,7 +901,7 @@ export function mountTestFocus(root, { config, getHass }) {
   const iconButton = (id, s) => '<button class="tfIcon' + (s.art ? ' art' : '') + '" type="button" data-act="' + s.button.act + '" aria-label="' + esc(s.button.label) + '"' +
     (s.art ? ' style="background-image:url(&quot;' + esc(s.art) + '&quot;)"' : iconSlot(id, s.icon)) + '></button>';
   // the name and value open more-info
-  const nameButton = (id) => '<button class="tfName" type="button" data-more="' + esc(id) + '" aria-label="' + esc(nameOf(id) + ', ' + valueOf(id) + '. More info') + '"><span class="activityRowName">' + esc(nameOf(id)) + '</span><span class="activityRowMeta">' + esc(valueOf(id)) + '</span></button>';
+  const nameButton = (id, state = true) => '<button class="tfName" type="button" data-more="' + esc(id) + '" aria-label="' + esc(nameOf(id) + ', ' + valueOf(id) + '. More info') + '"><span class="activityRowName">' + esc(nameOf(id)) + '</span>' + (state ? '<span class="activityRowMeta">' + esc(valueOf(id)) + '</span>' : '') + '</button>';
   // a tile shows the sections Matt kept (all but a cover's drawing to start with), at its size; small is the icon and
   // name only. In edit mode its controls rest under a bar of tools
   // in a summary's popup a tile keeps all its controls, except a light, which keeps only its brightness (Matt, 27 Oct:
@@ -918,7 +918,7 @@ export function mountTestFocus(root, { config, getHass }) {
       : only ? only.map((p) => s.sections[(s.parts || []).indexOf(p)]).filter(Boolean)
       : s.sections.map((sec, i) => (sec && (!keep || keep.includes((s.parts || [])[i])) ? sec : '')).filter(Boolean);
     return '<div class="tfAction' + (dac ? ' tfDac' : '') + (s.on ? ' on' : '') + (!dac && !sections.length ? ' tfHeadOnly' : '') + '" data-k="' + esc(id) + '"' + (s.tone ? ' data-tone="' + s.tone + '"' : '') + lightAttrs(id) + '>' +
-      '<div class="tfActionHead">' + iconButton(id, s) + nameButton(id) + '</div>' + sections.join('') + '</div>';
+      '<div class="tfActionHead">' + iconButton(id, s) + nameButton(id, inDialog || !(cardOf(id).hidden || []).includes('state')) + '</div>' + sections.join('') + '</div>';
   }
   /* the Dual Axis Controller (Matt's HACS card, custom:dual-controller-v3): when Settings picks it, every light is its
      tile, with its own pad and controller. It comes with HomeCore (Matt, 28 Oct: people install one thing): the first
@@ -1745,7 +1745,6 @@ export function mountTestFocus(root, { config, getHass }) {
   // a tile's controls on the board: a light's as Edit tile leaves them, its main one first; the rest all of theirs
   function cardControls(id) {
     const all = controlsOf(id);
-    if (!id.startsWith('light.')) return all;
     const own = cardOf(id), off = new Set(own.hidden || []), shown = all.filter((p) => !off.has(p));
     return shown.includes(own.main) ? [own.main, ...shown.filter((p) => p !== own.main)] : shown;
   }
@@ -3106,8 +3105,11 @@ export function mountTestFocus(root, { config, getHass }) {
      The card stays live on the board, the rest faded; the board slides left if the tray's over it. Kept with the board,
      prefs.dash.opts[key].card */
   function cardOf(key) { return dashPrefs().opts[key]?.card || {}; }
-  const PART_NAMES = { bright: 'Brightness', ct: 'Warmth', hue: 'Colour' };
-  const cardKind = (key) => (key === 'favs' ? 'favs' : key === 'energy' ? 'energy' : isRoomKey(key) ? 'room' : key.startsWith('light.') && states[key] && !wantsDac(key) ? 'light' : null);
+  // each section of a device's tile, named for its page
+  const PART_NAMES = { bright: 'Brightness', ct: 'Warmth', hue: 'Colour', step: 'Target', modes: 'Modes', blocks: 'Position', tilt: 'Tilt', buttons: 'Open, stop and close',
+    playback: 'Playback', volume: 'Volume', controls: 'Buttons', rooms: 'Rooms to clean' };
+  const partName = (id, p) => (p === 'controls' ? { lock: 'Lock, unlock and open', alarm_control_panel: 'Arm and disarm', valve: 'Open and close', vacuum: 'Start, dock and locate' }[id.split('.')[0]] || 'Off and on' : PART_NAMES[p] || cap(p));
+  const cardKind = (key) => (key === 'favs' ? 'favs' : key === 'energy' ? 'energy' : isRoomKey(key) ? 'room' : key.includes('.') && states[key] && !(key.startsWith('light.') && wantsDac(key)) ? 'device' : null);
   function paintCards() {
     const opts = overview ? {} : boardPrefs().opts, cs = getComputedStyle(app);
     const ground = parseColour(cs.getPropertyValue('--bg').trim() || cs.getPropertyValue('--color-bg-ground').trim() || '#000');
@@ -3220,10 +3222,12 @@ export function mountTestFocus(root, { config, getHass }) {
       return (controls.length ? group('Shown', '<ul class="hcHeList">' + controls.map((k) => ceShow('<span class="tfIcon">' + k.icon + '</span>', k.label, k.value, !off.has(k.key), 'data-ce-hide="' + esc(k.key) + '"', false)).join('') + '</ul>') : '') +
         (reads.length > 1 ? group('Main', ceMain('Main reading', main, reads.map((id) => [id, inRoom(r, id), valueOf(id), chip(iconSlot(id))]))) : '');
     }
-    if (kind === 'light') {
+    if (kind === 'device') {
+      // the state under its name, then each of its controls; the first of them comes first, and a short tile shows only it
       const all = controlsOf(key), shown = cardControls(key);
-      return all.length ? group('Shown', '<ul class="hcHeList">' + all.map((p) => ceShow('', PART_NAMES[p] || cap(p), '', !off.has(p), 'data-ce-hide="' + esc(p) + '"', false)).join('') + '</ul>') +
-        group('Main', ceMain('First', shown[0], shown.map((p) => [p, PART_NAMES[p] || cap(p)])) || '<p class="tfTrayNote">' + (shown.length ? 'Its one control comes first.' : 'Nothing shown but its name.') + '</p>') : '';
+      return group('Shown', '<ul class="hcHeList">' + ceShow('', 'State under the name', valueOf(key), !off.has('state'), 'data-ce-hide="state"', false) +
+        all.map((p) => ceShow('', partName(key, p), '', !off.has(p), 'data-ce-hide="' + esc(p) + '"', false)).join('') + '</ul>') +
+        (all.length ? group('Main', ceMain('First', shown[0], shown.map((p) => [p, partName(key, p)])) || '<p class="tfTrayNote">' + (shown.length ? 'Its one control comes first.' : 'Nothing shown but its name.') + '</p>') : '');
     }
     return '';
   }
