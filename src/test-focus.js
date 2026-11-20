@@ -2145,7 +2145,7 @@ export function mountTestFocus(root, { config, getHass }) {
     items.forEach((it) => itemSizes.observe(it.el));
     drawDashGraph();
     renderTray();
-    if (cardEdit) requestAnimationFrame(slideBoard);
+    scaleBoard();
   }
   /* Home's own layout (Matt, 12 Nov, from his Figma "Home (overview)": "all these cards are for the DEFAULT homepage, not
      part of the rules for the wider system"). Columns up to 252 wide and 20 apart, five at most; every card 337 tall
@@ -2194,7 +2194,7 @@ export function mountTestFocus(root, { config, getHass }) {
     const g = grid.getBoundingClientRect(), box = homePlaced.get(it.key);
     homeDrag = { key: it.key, el, on: false, x0: ev.clientX, y0: ev.clientY, left: box.x, top: box.y, order: [...homeOrderNow] };
     const move = (e) => {
-      const dx = e.clientX - homeDrag.x0, dy = e.clientY - homeDrag.y0;
+      const dx = (e.clientX - homeDrag.x0) / boardScale(), dy = (e.clientY - homeDrag.y0) / boardScale();
       if (!homeDrag.on && Math.hypot(dx, dy) < 5) return;
       // it lifts with a small bounce (Matt, 12 Nov: "the small bouncy effect")
       if (!homeDrag.on) { homeDrag.on = true; el.classList.add('tfDragging'); if (!reduced()) el.animate([{ scale: '1' }, { scale: '1.05' }, { scale: '1.02' }], { duration: 260, easing: 'cubic-bezier(.2,1.35,.4,1)' }); }
@@ -2500,6 +2500,7 @@ export function mountTestFocus(root, { config, getHass }) {
     layoutBoard();
     if (on) { editStart = JSON.stringify(prefs); trayPage(tray, 'Edit custom dashboard', null); } // a phone starts at the list
     else if (editStart && JSON.stringify(prefs) !== editStart) toast('Changes saved');
+    scaleBoard();
   }
   // a card's ⋯: its height (XS to XL), its width (a tile or a card), a cell left, right, up or down, Energy today's
   // graph, and hide; a tile is removed instead (Matt, 29 Oct), and added again from the edit tray
@@ -2739,7 +2740,7 @@ export function mountTestFocus(root, { config, getHass }) {
   function clearOfTray(key) {
     const p = lastPlaced.get(key);
     if (!p || !tray.classList.contains('open') || trayTucked) return false;
-    const { n, w } = pegsFor(grid.clientWidth), edge = tray.getBoundingClientRect().left - grid.getBoundingClientRect().left;
+    const { n, w } = pegsFor(grid.clientWidth), edge = (tray.getBoundingClientRect().left - grid.getBoundingClientRect().left) / boardScale();
     const clear = (c) => c * (w + PEG_GAP) + p.cols * w + (p.cols - 1) * PEG_GAP <= edge;
     if (clear(p.col)) return false;
     const taken = new Set();
@@ -2951,7 +2952,7 @@ export function mountTestFocus(root, { config, getHass }) {
     homeTray.classList.toggle('open', on);
     homeTray.toggleAttribute('inert', !on);
     app.classList.toggle('hcHomeEditing', on);
-    if (testFocus && grid) layoutBoard();
+    if (testFocus && grid) { layoutBoard(); scaleBoard(); }
     const pen = $('dashEditNav'), head = homeTray.querySelector('.tfTrayHead');
     if (pen && on) { penHome = pen.parentElement; head.appendChild(pen); }
     if (pen && !on && penHome) penHome.appendChild(pen);
@@ -3150,15 +3151,23 @@ export function mountTestFocus(root, { config, getHass }) {
     drawCardEditor();
   }
   // where the tray is over the card, the board slides left until it isn't (no further than the rail)
-  function slideBoard() {
-    if (!cardEdit) { grid.style.translate = ''; return; }
-    const el = grid.querySelector(cardSel(cardEdit)), inner = tray.querySelector('.tfTrayInner');
-    if (!el || !inner) return;
-    // where the card is with the board unslid, from the layout (the board may be part way through sliding)
-    const left = (grid.offsetParent?.getBoundingClientRect().left || 0) + grid.offsetLeft + (el.offsetParent === grid ? el.offsetLeft : parseFloat(el.style.left) || 0);
-    const edge = inner.getBoundingClientRect().left, rail = root.querySelector('.hcRail')?.getBoundingClientRect().right || 0;
-    const over = left + el.offsetWidth + 24 - edge, room = left - rail - 24;
-    grid.style.translate = over > 0 && room > 0 ? -Math.round(Math.min(over, room)) + 'px 0' : '';
+  /* the board beside an open tray (Matt, 20 Nov: the trays "overtake a lot of the screen"): the whole board scales down,
+     from its top left, until it fits in the room left of the tray, every card keeping its place and proportion; the
+     tray closed or tucked, it's its size again. The page's scroll follows the scaled height. Pointer maths on the board
+     (drags) divides by the scale */
+  const boardScale = () => parseFloat(grid.style.scale) || 1;
+  function scaleBoard() {
+    const open = tray.classList.contains('open') && !trayTucked ? tray : homeTray.classList.contains('open') ? homeTray : null;
+    const phone = grid.clientWidth < 2 * PEG + PEG_GAP;
+    let k = 1;
+    if (open && !phone) {
+      // the tray at rest (it may still be sliding in): against the window's right edge
+      const left = grid.getBoundingClientRect().left, room = window.innerWidth - open.offsetWidth - 24 - left;
+      k = Math.max(0.35, Math.min(1, room / grid.clientWidth));
+    }
+    const was = boardScale();
+    grid.style.scale = k < 1 ? k.toFixed(4) : '';
+    grid.style.marginBottom = k < 1 ? -Math.round((1 - k) * grid.offsetHeight) + 'px' : '';
   }
   function openCardEditor(key) {
     cardEdit = key;
@@ -3177,7 +3186,6 @@ export function mountTestFocus(root, { config, getHass }) {
     cardEdit = null;
     tray.classList.remove('hcTrayCard');
     app.classList.remove('hcCardEditing');
-    grid.style.translate = '';
     grid.querySelectorAll('.hcCardEdited').forEach((el) => el.classList.remove('hcCardEdited'));
     trayPage(tray, 'Edit custom dashboard', null);
     if (!refocus) return;
@@ -3318,7 +3326,7 @@ export function mountTestFocus(root, { config, getHass }) {
     else if (t.hasAttribute('data-info')) openInfo(t);
     else if (t.hasAttribute('data-dash-sums')) { saveDash({ ...boardPrefs(), hidden: boardPrefs().hidden.filter((k) => k !== 'sums'), sumsOff: !prefs.dash?.sumsOff }); refresh(); renderTray(); }
     else if (t.hasAttribute('data-dash-welcome')) { const d = dashPrefs(); saveDash({ ...d, welcome: !d.welcome }); refresh(); renderTray(); }
-    else if (t.hasAttribute('data-tray-tuck')) { trayTucked = !trayTucked; renderTray(); }
+    else if (t.hasAttribute('data-tray-tuck')) { trayTucked = !trayTucked; renderTray(); scaleBoard(); }
     else if (t.hasAttribute('data-phone-toggle')) { phoneShown = !phoneShown; renderTray(); if (phoneShown) phone.querySelector('[data-phone-key]')?.focus({ preventScroll: true }); }
     else if (t.dataset.trayCard) { if (ev.detail === 0) { showCard(t.dataset.trayCard); renderTray(); } } // a press from the keyboard; a pointer's is its drag
     else if (t.dataset.favEye) setFavShown(t.dataset.favEye, t.getAttribute('aria-pressed') !== 'true');
@@ -3375,9 +3383,9 @@ export function mountTestFocus(root, { config, getHass }) {
       ghost.style.transform = 'translate(' + (e.clientX - 24) + 'px,' + (e.clientY - 24) + 'px)';
       const overTray = !trayTucked && e.clientX >= tray.getBoundingClientRect().left;
       if (kind === 'card') {
-        const r = grid.getBoundingClientRect(), { w } = pegsFor(grid.clientWidth);
-        drag = !overTray && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top + boardTop
-          ? { key, col: Math.max(0, Math.floor((e.clientX - r.left) / (w + PEG_GAP))), row: Math.max(0, Math.floor((e.clientY - r.top - boardTop) / ROW_PITCH)), fromTray: true } : null;
+        const r = grid.getBoundingClientRect(), { w } = pegsFor(grid.clientWidth), k = boardScale();
+        drag = !overTray && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top + boardTop * k
+          ? { key, col: Math.max(0, Math.floor((e.clientX - r.left) / k / (w + PEG_GAP))), row: Math.max(0, Math.floor(((e.clientY - r.top) / k - boardTop) / ROW_PITCH)), fromTray: true } : null;
         if (!raf) raf = requestAnimationFrame(() => { raf = 0; layoutBoard(); });
         return;
       }
@@ -3609,7 +3617,7 @@ export function mountTestFocus(root, { config, getHass }) {
       paint(tilt, Math.atan2(vy, vx), lift * (1 + 0.1 * st), lift * (1 - 0.063 * st));
     };
     const move = (e) => {
-      dx = e.clientX - x0; dy = e.clientY - y0;
+      dx = (e.clientX - x0) / boardScale(); dy = (e.clientY - y0) / boardScale();
       if (!started) { if (Math.hypot(dx, dy) < 4) return; started = true; drag = { key: it.key, col: p.col, row: p.row }; el.classList.add('tfDragging', 'mvDrag'); spring = requestAnimationFrame(frame); }
       if (!free && Math.hypot(dx, dy) > D.stick) { free = true; vx = dx * 0.085; vy = dy * 0.085; }
       drag.col = Math.round((p.x + dx) / (w + PEG_GAP));
