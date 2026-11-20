@@ -1330,4 +1330,10 @@ button.tfAreaIcon{cursor:pointer}
 #app.hcCardEditing #homeView .hcCardEdited{z-index:2}
 /* the board scales down beside an open tray, from its top left, and back when the tray goes (Matt, 20 Nov) */
 #app.tfBoard #homeView>.grid{transform-origin:0 0;transition:scale .35s cubic-bezier(.2,.7,.3,1),margin-bottom .35s cubic-bezier(.2,.7,.3,1)}
+/* the handles, hide buttons and ⋯ menus stay their size on the scaled board (Matt, 20 Nov): each scales back up by the
+   same amount, the chips from the card's top right, a favourite's eye from its middle, the menu from its top right */
+#app.tfBoard #homeView>.grid .tfEditGrip{left:calc(50% - 40px);transform:none;transform-origin:50% 0;scale:calc(1 / var(--board-k,1))} /* centred by its left, not a translate, which the scale would stretch */
+#app.tfBoard #homeView>.grid .tfEditChip{transform-origin:100% 0;scale:calc(1 / var(--board-k,1))}
+#app.tfBoard #homeView>.grid .tfFavHide{transform-origin:50% 50%;scale:calc(1 / var(--board-k,1))}
+#app.tfBoard #homeView>.grid .tfBoardMenu{transform-origin:100% 0;scale:calc(1 / var(--board-k,1))}
 @media (prefers-reduced-motion:reduce){#app.tfBoard #homeView>.grid{transition:none}}

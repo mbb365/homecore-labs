@@ -2528,7 +2528,7 @@ export function mountTestFocus(root, { config, getHass }) {
       item('left', 'Move left', full || p.col === 0) + item('right', 'Move right', full || p.col + p.cols >= n) +
       item('up', 'Move up', p.row <= 0) + item('down', 'Move down') + (tile ? item('remove', 'Remove') : item('hide', 'Hide'));
     grid.appendChild(menu);
-    const left = Math.min(p.x + p.w - menu.offsetWidth, grid.clientWidth - menu.offsetWidth);
+    const left = Math.min(p.x + p.w - menu.offsetWidth, grid.clientWidth - menu.offsetWidth); // it scales up from its top right, so it stays in the card's corner
     Object.assign(menu.style, { left: Math.max(0, left) + 'px', top: (p.y + 28) + 'px' });
     boardOpen = { key, menu, opener };
     menu.querySelector('button:not([disabled])')?.focus();
@@ -3167,6 +3167,7 @@ export function mountTestFocus(root, { config, getHass }) {
     }
     const was = boardScale();
     grid.style.scale = k < 1 ? k.toFixed(4) : '';
+    grid.style.setProperty('--board-k', k < 1 ? k.toFixed(4) : '1'); // the handles and menus scale back up by it
     grid.style.marginBottom = k < 1 ? -Math.round((1 - k) * grid.offsetHeight) + 'px' : '';
   }
   function openCardEditor(key) {
