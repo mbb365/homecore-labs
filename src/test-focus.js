@@ -915,7 +915,7 @@ export function mountTestFocus(root, { config, getHass }) {
     const s = specFor(id), dac = id.startsWith('light.') && dacFor(id) && !(only && sizeOf(id) < 3), keep = only || (inDialog && id.startsWith('light.') ? ['bright'] : null);
     const sections = dac ? ['<div class="tfDacPad" data-dac="' + (inDialog ? 'more:' : only ? 'dash:' : 'tile:') + esc(id) + '"></div>']
       // on the board, in the order given (a light's main control first, Edit tile)
-      : only ? only.map((p) => s.sections[(s.parts || []).indexOf(p)]).filter(Boolean)
+      : only ? only.map((p) => s.sections[(s.parts || []).indexOf(p)]).filter(Boolean).map((sec, i) => sec.replace(/^<(\w+)/, '<$1 data-ce-item="' + esc(only[i]) + '"'))
       : s.sections.map((sec, i) => (sec && (!keep || keep.includes((s.parts || [])[i])) ? sec : '')).filter(Boolean);
     return '<div class="tfAction' + (dac ? ' tfDac' : '') + (s.on ? ' on' : '') + (!dac && !sections.length ? ' tfHeadOnly' : '') + '" data-k="' + esc(id) + '"' + (s.tone ? ' data-tone="' + s.tone + '"' : '') + lightAttrs(id) + '>' +
       '<div class="tfActionHead">' + iconButton(id, s) + nameButton(id, inDialog || !(cardOf(id).hidden || []).includes('state')) + '</div>' + sections.join('') + '</div>';
@@ -1270,18 +1270,18 @@ export function mountTestFocus(root, { config, getHass }) {
     const keys = roomKeys(r), main = (states[own.main] && own.main) || mainOf(r), h = main && headline(main), sub = main ? mainSub(r, main, keys) : '';
     const big = h ? h.text + (h.unit ? ' ' + h.unit : '') : '';
     const opens = (k) => { const ids = groupIds(r, k.key); return ids.length === 1 ? ids[0] : 'group:' + r.id + ':' + k.key; };
-    const controls = keys.filter((k) => k.kind === 'control' && !off.has(k.key)).slice(0, 4), lit = (k) => (k.on && k.light ? ' data-light style="' + k.light + '"' : '');
+    const controls = inCardOrder(key || '', keys.filter((k) => k.kind === 'control' && !off.has(k.key)), (k) => k.key).slice(0, 4), lit = (k) => (k.on && k.light ? ' data-light style="' + k.light + '"' : '');
     /* the rule (Matt, 20 Nov: "If it is just an icon, it opens the panel or more info that controls that. if it is a tile
        with name and subtitle etc then it opens the more info and the icon in the tile becomes the binary toggle like it is
        (if defined by the device/entity)"): an icon on its own opens what it stands for (the room's lights panel, the
        thermostat); a tile (icon, name, state) opens it from anywhere on it, and its icon turns it on and off where it can
        be, else opens it too. The room's own head is as it was: its icon and name open the room's page */
-    const opener = (k) => '<button class="tfIcon' + (k.on ? ' on' : '') + '" type="button" data-tone="' + k.tone + '"' + lit(k) + ' data-more="' + esc(opens(k)) + '" aria-label="' + esc(r.name + ' ' + k.label.toLowerCase() + ', ' + k.value + '. Open') + '">' + k.icon + '</button>';
+    const opener = (k) => '<button class="tfIcon' + (k.on ? ' on' : '') + '" type="button" data-ce-item="' + esc(k.key) + '" data-tone="' + k.tone + '"' + lit(k) + ' data-more="' + esc(opens(k)) + '" aria-label="' + esc(r.name + ' ' + k.label.toLowerCase() + ', ' + k.value + '. Open') + '">' + k.icon + '</button>';
     const toggle = (k) => '<button class="tfIcon' + (k.on ? ' on' : '') + '" type="button" data-tone="' + k.tone + '"' + lit(k) + ' data-acts="' + acts(k.acts) + '" aria-label="' + esc(k.aria) + '" aria-pressed="' + k.on + '">' + k.icon + '</button>';
     const devices = controls.map(opener);
     // wide, the same devices as heads (icon, name, state), as the open room shows them (Matt, 6 Nov; Figma 954:6297): the
     // tile opens its control, its icon the switch
-    const heads = controls.map((k) => '<div class="tfRoomDev' + (k.on ? ' on' : '') + '" data-more="' + esc(opens(k)) + '">' + (k.acts?.length ? toggle(k) : '<span class="tfIcon' + (k.on ? ' on' : '') + '" data-tone="' + k.tone + '"' + lit(k) + ' aria-hidden="true">' + k.icon + '</span>') +
+    const heads = controls.map((k) => '<div class="tfRoomDev' + (k.on ? ' on' : '') + '" data-ce-item="' + esc(k.key) + '" data-more="' + esc(opens(k)) + '">' + (k.acts?.length ? toggle(k) : '<span class="tfIcon' + (k.on ? ' on' : '') + '" data-tone="' + k.tone + '"' + lit(k) + ' aria-hidden="true">' + k.icon + '</span>') +
       '<button class="tfName tfRoomDevName" type="button" data-more="' + esc(opens(k)) + '" aria-label="' + esc(r.name + ' ' + k.label.toLowerCase() + ', ' + k.value + '. Open') + '"><span class="activityRowName">' + esc(k.label) + '</span><span class="activityRowMeta">' + esc(k.value) + '</span></button></div>');
     // the room's icon opens the room's page (Matt, 18 Nov), bare as the summaries' are; it used to turn off everything in
     // the room, which "just shouldn't happen"
@@ -1644,12 +1644,12 @@ export function mountTestFocus(root, { config, getHass }) {
     });
     energyText.clear();
     // the sources Edit card leaves on, the graph on its main one to start with
-    const own = cardOf('energy'), off = new Set(own.hidden || []), shown = tiles.filter((t) => !off.has(t.id)).length ? tiles.filter((t) => !off.has(t.id)) : tiles;
+    const own = cardOf('energy'), off = new Set(own.hidden || []), kept = inCardOrder('energy', tiles, (t) => t.id).filter((t) => !off.has(t.id)), shown = kept.length ? kept : tiles;
     if (!shown.some((t) => t.id === energyPick)) energyPick = (shown.find((t) => t.id === own.main) || shown[0]).id;
     const rows = shown.map((t) => {
       const text = energyAmount(t), icon = ENERGY_ICON[t.key], on = t.id === energyPick;
       energyText.set(t.id, { name: t.name, text, icon });
-      return '<div class="activityRow tap' + (on ? ' picked' : '') + '" role="button" tabindex="0" data-energy-pick="' + esc(t.id) + '" aria-pressed="' + on + '" aria-label="' + esc(t.name + ', ' + text) + '. Show its day in the graph">' +
+      return '<div class="activityRow tap' + (on ? ' picked' : '') + '" role="button" tabindex="0" data-ce-item="' + esc(t.id) + '" data-energy-pick="' + esc(t.id) + '" aria-pressed="' + on + '" aria-label="' + esc(t.name + ', ' + text) + '. Show its day in the graph">' +
         '<div class="tfIcon" aria-hidden="true"' + iconSlot('', icon, t.name) + '></div><div><div class="activityRowName">' + esc(t.name) + '</div><div class="activityRowMeta">' + esc(text) + '</div></div></div>';
     });
     // the picked source's day as a graph, above the glance or below it (its ⋯ in edit mode)
@@ -1744,9 +1744,8 @@ export function mountTestFocus(root, { config, getHass }) {
   const dashControl = (id) => cardControls(id).slice(0, sizeOf(id) - 1);
   // a tile's controls on the board: a light's as Edit tile leaves them, its main one first; the rest all of theirs
   function cardControls(id) {
-    const all = controlsOf(id);
-    const own = cardOf(id), off = new Set(own.hidden || []), shown = all.filter((p) => !off.has(p));
-    return shown.includes(own.main) ? [own.main, ...shown.filter((p) => p !== own.main)] : shown;
+    const own = cardOf(id), off = new Set(own.hidden || []), shown = inCardOrder(id, controlsOf(id)).filter((p) => !off.has(p));
+    return !own.order && shown.includes(own.main) ? [own.main, ...shown.filter((p) => p !== own.main)] : shown;
   }
   function dashTileIds(n) {
     const own = dashPrefs().tiles;
@@ -3106,6 +3105,13 @@ export function mountTestFocus(root, { config, getHass }) {
      The card stays live on the board, the rest faded; the board slides left if the tray's over it. Kept with the board,
      prefs.dash.opts[key].card */
   function cardOf(key) { return dashPrefs().opts[key]?.card || {}; }
+  // a card's parts in the order they were dragged into (card.order), the rest after in their own order
+  const inCardOrder = (key, items, idOf = (x) => x) => {
+    const o = cardOf(key).order || [], at = (x) => { const i = o.indexOf(idOf(x)); return i < 0 ? o.length + items.indexOf(x) : i; };
+    return [...items].sort((a, b) => at(a) - at(b));
+  };
+  // a drag on the card's own page, or on the card itself, sets the order: Favourites' is the favourites' own
+  const saveCardOrder = (key, ids) => { if (key === 'favs') { const stars = new Set(starred()); trayHtml.favs = null; saveFavs({ favourites: ids.filter((id) => stars.has(id)) }); layoutBoard(); } else setCard(key, { order: ids }, true); };
   // each section of a device's tile, named for its page
   const PART_NAMES = { bright: 'Brightness', ct: 'Warmth', hue: 'Colour', step: 'Target', modes: 'Modes', blocks: 'Position', tilt: 'Tilt', buttons: 'Open, stop and close',
     playback: 'Playback', volume: 'Volume', controls: 'Buttons', rooms: 'Rooms to clean' };
@@ -3170,6 +3176,49 @@ export function mountTestFocus(root, { config, getHass }) {
     grid.style.setProperty('--board-k', k < 1 ? k.toFixed(4) : '1'); // the handles and menus scale back up by it
     grid.style.marginBottom = k < 1 ? -Math.round((1 - k) * grid.offsetHeight) + 'px' : '';
   }
+  /* the card's parts dragged into place on the card itself (Matt, 20 Nov: "WYSIWYG"): a favourite, an area's device,
+     an energy source or a tile's control follows the pointer; the part nearest it marks where it'll go; let go, the card
+     is drawn again in that order. A press without a drag still does what the part does */
+  const ceItemsOf = (card) => [...card.querySelectorAll(cardEdit === 'favs' ? '[data-k^="fav:"]' : '[data-ce-item]')].filter((el) => el.offsetWidth);
+  const ceIdOf = (el) => (cardEdit === 'favs' ? el.dataset.k.slice(4) : el.dataset.ceItem);
+  function cardItemDown(ev) {
+    if (!cardEdit || ev.button !== 0) return;
+    const card = grid.querySelector(cardSel(cardEdit)), el = card && ev.target.closest(cardEdit === 'favs' ? '[data-k^="fav:"]' : '[data-ce-item]');
+    if (!el || !card.contains(el)) return;
+    ev.stopPropagation(); // not the part's own drag (a bar's), nor the board's
+    const items = ceItemsOf(card), from = items.indexOf(el);
+    if (from < 0 || items.length < 2) return;
+    const x0 = ev.clientX, y0 = ev.clientY, mids = items.map((x) => { const r = x.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+    let started = false, to = from;
+    const move = (e) => {
+      const dx = e.clientX - x0, dy = e.clientY - y0;
+      if (!started) { if (Math.hypot(dx, dy) < 5) return; started = true; el.classList.add('hcCeDragging'); }
+      const k = boardScale();
+      el.style.transform = 'translate(' + (dx / k).toFixed(1) + 'px,' + (dy / k).toFixed(1) + 'px)';
+      let best = Infinity, near = from;
+      mids.forEach(([mx, my], i) => { const d = Math.hypot(e.clientX - mx, e.clientY - my); if (d < best) { best = d; near = i; } });
+      if (near !== to) { items[to]?.classList.remove('hcCeOver'); to = near; if (to !== from) items[to].classList.add('hcCeOver'); }
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+      if (!started) return;
+      const eat = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
+      window.addEventListener('click', eat, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 300);
+      items.forEach((x) => x.classList.remove('hcCeOver'));
+      el.classList.remove('hcCeDragging');
+      el.style.transform = '';
+      if (to === from) return;
+      const ids = items.map(ceIdOf);
+      ids.splice(to, 0, ids.splice(from, 1)[0]);
+      // the rest of the card's parts (hidden ones) keep their places after these
+      const all = [...ids, ...(cardEdit === 'favs' ? starred() : cardOf(cardEdit).order || []).filter((x) => !ids.includes(x))];
+      saveCardOrder(cardEdit, all);
+      const now = grid.querySelector(cardSel(cardEdit))?.querySelector(cardEdit === 'favs' ? '[data-k="fav:' + CSS.escape(ids[to]) + '"]' : '[data-ce-item="' + CSS.escape(ids[to]) + '"]');
+      if (now && !reduced()) squash(now);
+    };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+  }
   function openCardEditor(key) {
     cardEdit = key;
     trayTucked = false;
@@ -3199,27 +3248,29 @@ export function mountTestFocus(root, { config, getHass }) {
   const ceSwatch = (k, label) => '<label class="hcSwatch"><input type="color" data-ce-colour="' + k + '" aria-label="' + esc(label) + '"></label>';
   // a row that shows or hides something in the card; the last one shown can't go
   const chip = (slot) => '<span class="tfIcon"' + slot + '></span>';
-  const ceShow = (icon, name, meta, on, attr, last) => '<li class="hcCeRow' + (icon ? '' : ' hcCeBare') + '">' + icon +
+  const ceShow = (icon, name, meta, on, attr, last, id = null) => '<li class="hcCeRow' + (icon ? '' : ' hcCeBare') + (id == null ? ' hcCeFixed' : '') + '"' + (id == null ? '' : ' data-ce-row="' + esc(id) + '"') + '>' +
+    (id == null ? '<span></span>' : '<button class="tfTrayBtn hcHeGrip" type="button" data-ce-grip aria-label="Move ' + esc(name) + '. Use the up and down arrows">' + GRIP + '</button>') + icon +
     '<span class="tfTrayName"><span class="activityRowName">' + esc(name) + '</span>' + (meta ? '<span class="activityRowMeta">' + esc(meta) + '</span>' : '') + '</span>' +
     '<button class="switch' + (on ? ' on' : '') + '" type="button" role="switch" aria-checked="' + on + '" aria-label="Show ' + esc(name) + '" ' + attr + (on && last ? ' disabled' : '') + '></button></li>';
   // the main one: side by side when there are few, else a list to pick from
   const ceMain = (label, value, opts) => (opts.length < 2 ? '' : opts.length <= 4 && opts.every(([, t]) => t.length <= 14)
     ? '<div class="hcHeLine hcHeChoiceLine"><span class="activityRowName">' + esc(label) + '</span>' + ceSeg(label, 'data-ce-main', value, opts.map(([v, t]) => [v, t])) + '</div>'
     : '<div class="sectionLabel hcCeSub">' + esc(label) + '</div><div class="hcHeList" role="radiogroup" aria-label="' + esc(label) + '">' + opts.map(([v, t, meta, icon]) =>
-      '<button class="hcCeRow hcCePick' + (icon ? '' : ' hcCeBare') + '" type="button" role="radio" aria-checked="' + (v === value) + '" data-ce-main="' + esc(v) + '">' + (icon || '') +
+      '<button class="hcCeRow hcCePick hcCeFixed' + (icon ? '' : ' hcCeBare') + '" type="button" role="radio" aria-checked="' + (v === value) + '" data-ce-main="' + esc(v) + '"><span></span>' + (icon || '') +
       '<span class="tfTrayName"><span class="activityRowName">' + esc(t) + '</span>' + (meta ? '<span class="activityRowMeta">' + esc(meta) + '</span>' : '') + '</span><span class="hcCeTick" aria-hidden="true">' + TICK + '</span></button>').join('') + '</div>');
   // what the card shows, and its main, for the cards that have them
   function cardContent(key) {
     const own = cardOf(key), off = new Set(own.hidden || []), kind = cardKind(key);
-    const group = (label, body) => '<div class="hcCeGroup"><div class="sectionLabel">' + label + '</div>' + body + '</div>';
+    const group = (label, body, note = '') => '<div class="hcCeGroup"><div class="sectionLabel">' + label + '</div>' + (note ? '<p class="tfTrayNote">' + note + '</p>' : '') + body + '</div>';
+    const DRAG_NOTE = 'Drag to change the order, here or on the card.';
     if (kind === 'favs') {
       const hidden = new Set(prefs.favHidden || []), stars = starred(), shown = stars.filter((id) => !hidden.has(id)).length + (suggestOn() ? 1 : 0);
-      return group('Shown', '<ul class="hcHeList">' + stars.map((id) => ceShow(chip(iconSlot(id, iconFor(id))), nameOf(id), whereIs.get(id) || '', !hidden.has(id), 'data-ce-fav="' + esc(id) + '"', shown < 2)).join('') + '</ul>' +
+      return group('Shown', '<ul class="hcHeList">' + stars.map((id) => ceShow(chip(iconSlot(id, iconFor(id))), nameOf(id), whereIs.get(id) || '', !hidden.has(id), 'data-ce-fav="' + esc(id) + '"', shown < 2, id)).join('') + '</ul>' +
         ceLine('Suggestions', '<button class="switch' + (suggestOn() ? ' on' : '') + '" type="button" role="switch" aria-checked="' + suggestOn() + '" aria-label="Show suggestions" data-ce-suggest' + (suggestOn() && shown < 2 ? ' disabled' : '') + '></button>'));
     }
     if (kind === 'energy') {
       const tiles = energyTiles.length ? energyTiles : [], shown = tiles.filter((t) => !off.has(t.id));
-      return group('Shown', '<ul class="hcHeList">' + tiles.map((t) => ceShow(chip(iconSlot('', ENERGY_ICON[t.key], t.name)), t.name, energyAmount(t), !off.has(t.id), 'data-ce-hide="' + esc(t.id) + '"', shown.length < 2)).join('') + '</ul>') +
+      return group('Shown', '<ul class="hcHeList">' + inCardOrder(key, tiles, (t) => t.id).map((t) => ceShow(chip(iconSlot('', ENERGY_ICON[t.key], t.name)), t.name, energyAmount(t), !off.has(t.id), 'data-ce-hide="' + esc(t.id) + '"', shown.length < 2, t.id)).join('') + '</ul>', DRAG_NOTE) +
         group('Main', ceMain('Graph', shown.some((t) => t.id === own.main) ? own.main : shown[0]?.id, shown.map((t) => [t.id, t.name, energyAmount(t), chip(iconSlot('', ENERGY_ICON[t.key], t.name))])));
     }
     if (kind === 'room') {
@@ -3228,15 +3279,15 @@ export function mountTestFocus(root, { config, getHass }) {
       const keys = roomKeys(r), controls = keys.filter((k) => k.kind === 'control');
       const reads = [...r.readings, ...r.actions.filter((id) => /^climate\./.test(id)), ...r.solar].filter((id, i, all) => states[id] && all.indexOf(id) === i);
       const main = (states[own.main] && own.main) || mainOf(r);
-      return (controls.length ? group('Shown', '<ul class="hcHeList">' + controls.map((k) => ceShow('<span class="tfIcon">' + k.icon + '</span>', k.label, k.value, !off.has(k.key), 'data-ce-hide="' + esc(k.key) + '"', false)).join('') + '</ul>') : '') +
+      return (controls.length ? group('Shown', '<ul class="hcHeList">' + inCardOrder(key, controls, (k) => k.key).map((k) => ceShow('<span class="tfIcon">' + k.icon + '</span>', k.label, k.value, !off.has(k.key), 'data-ce-hide="' + esc(k.key) + '"', false, k.key)).join('') + '</ul>', DRAG_NOTE) : '') +
         (reads.length > 1 ? group('Main', ceMain('Main reading', main, reads.map((id) => [id, inRoom(r, id), valueOf(id), chip(iconSlot(id))]))) : '');
     }
     if (kind === 'device') {
       // the state under its name, then each of its controls; the first of them comes first, and a short tile shows only it
-      const all = controlsOf(key), shown = cardControls(key);
+      // the first control shown comes first; a short tile shows only it
+      const all = inCardOrder(key, controlsOf(key));
       return group('Shown', '<ul class="hcHeList">' + ceShow('', 'State under the name', valueOf(key), !off.has('state'), 'data-ce-hide="state"', false) +
-        all.map((p) => ceShow('', partName(key, p), '', !off.has(p), 'data-ce-hide="' + esc(p) + '"', false)).join('') + '</ul>') +
-        (all.length ? group('Main', ceMain('First', shown[0], shown.map((p) => [p, partName(key, p)])) || '<p class="tfTrayNote">' + (shown.length ? 'Its one control comes first.' : 'Nothing shown but its name.') + '</p>') : '');
+        all.map((p) => ceShow('', partName(key, p), '', !off.has(p), 'data-ce-hide="' + esc(p) + '"', false, p)).join('') + '</ul>', all.length > 1 ? DRAG_NOTE + ' The first comes first; a short tile shows only it.' : '');
     }
     return '';
   }
@@ -3280,7 +3331,7 @@ export function mountTestFocus(root, { config, getHass }) {
     else if (t.hasAttribute('data-ce-suggest')) { saveFavs({ suggest: !suggestOn() }); layoutBoard(); }
     else if (t.hasAttribute('data-ce-reset')) {
       const before = prefs;
-      setCard(key, { bg: null, opacity: null, stroke: null, line: null, hidden: null, main: null }, true);
+      setCard(key, { bg: null, opacity: null, stroke: null, line: null, hidden: null, main: null, order: null }, true);
       toast(boardName(key) + ' reset', undoTo(before));
     }
     // the control pressed was drawn again: focus goes back to it
@@ -3292,7 +3343,11 @@ export function mountTestFocus(root, { config, getHass }) {
   });
   // the opacity bar: dragged anywhere along it, or the arrow keys (Shift for tens), Home and End
   const setCardBar = (bar, v) => setCard(cardEdit, { [bar.dataset.ceBar]: Math.max(0, Math.min(100, Math.round(v))) });
+  const ceRows = () => [...tray.querySelectorAll('[data-tray="cardedit"] [data-ce-row]')];
+  const ceFind = (id) => tray.querySelector('[data-tray="cardedit"] [data-ce-row="' + CSS.escape(id) + '"]');
   tray.addEventListener('pointerdown', (ev) => {
+    const g = ev.target.closest('[data-ce-grip]');
+    if (g && cardEdit && ev.button === 0) { listDrag(ev, g.closest('[data-ce-row]'), 'ceRow', (ids) => saveCardOrder(cardEdit, ids), ceFind); return; }
     const bar = ev.target.closest('[data-ce-bar]');
     if (!bar || !cardEdit || ev.button > 0) return;
     ev.preventDefault();
@@ -3308,6 +3363,16 @@ export function mountTestFocus(root, { config, getHass }) {
   tray.addEventListener('keydown', (ev) => {
     if (!cardEdit) return;
     if (ev.key === 'Escape' && !ev.target.matches?.('input')) { ev.preventDefault(); ev.stopPropagation(); closeCardEditor(); return; }
+    const g = ev.target.closest?.('[data-ce-grip]');
+    if (g && ['ArrowUp', 'ArrowDown'].includes(ev.key)) {
+      ev.preventDefault();
+      const ids = ceRows().map((x) => x.dataset.ceRow), id = g.closest('[data-ce-row]').dataset.ceRow, i = ids.indexOf(id), to = i + (ev.key === 'ArrowUp' ? -1 : 1);
+      if (to < 0 || to >= ids.length) return;
+      ids.splice(to, 0, ids.splice(i, 1)[0]);
+      saveCardOrder(cardEdit, ids);
+      ceFind(id)?.querySelector('[data-ce-grip]')?.focus({ preventScroll: true });
+      return;
+    }
     const bar = ev.target.closest?.('[data-ce-bar]');
     if (!bar) return;
     const now = Number(bar.getAttribute('aria-valuenow')), step = ev.shiftKey ? 10 : 1;
@@ -5002,6 +5067,7 @@ export function mountTestFocus(root, { config, getHass }) {
     // the dashboard's edit mode: the pencil in the bottom bar, and dragging on the board
     root.querySelector('.bottomNav')?.insertAdjacentHTML('beforeend', '<button class="navBtn" id="dashEditNav" type="button" title="Edit" aria-label="Edit the dashboard" aria-pressed="false" hidden>' + PENCIL + '</button>');
     $('dashEditNav')?.addEventListener('click', () => (overview ? setHomeEditing(!homeEditing) : setEditing(!editing)));
+    grid.addEventListener('pointerdown', cardItemDown, true); // a card's parts, while its page is open
     grid.addEventListener('pointerdown', boardDown);
     grid.addEventListener('pointerdown', homeDown);
     grid.addEventListener('scroll', (ev) => { if (ev.target.classList?.contains('hcSchedList') || ev.target.classList?.contains('hcFadeList')) schedFade(ev.target); }, true);
