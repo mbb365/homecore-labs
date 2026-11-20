@@ -1332,7 +1332,9 @@ button.tfAreaIcon{cursor:pointer}
 #app.tfBoard #homeView>.grid{transform-origin:0 0;transition:scale .35s cubic-bezier(.2,.7,.3,1),margin-bottom .35s cubic-bezier(.2,.7,.3,1)}
 /* the handles, hide buttons and ⋯ menus stay their size on the scaled board (Matt, 20 Nov): each scales back up by the
    same amount, the chips from the card's top right, a favourite's eye from its middle, the menu from its top right */
-#app.tfBoard #homeView>.grid .tfEditGrip{left:calc(50% - 40px);transform:none;transform-origin:50% 0;scale:calc(1 / var(--board-k,1))} /* centred by its left, not a translate, which the scale would stretch */
+/* the grip smaller (Matt, 20 Nov: at half scale it was most of a tile): 48 × 28, as tall as the ⋯ chip */
+#app.tfBoard #homeView>.grid .tfEditGrip{top:-4px;left:calc(50% - 24px);width:48px;height:28px;border-radius:14px;transform:none;transform-origin:50% 0;scale:calc(1 / var(--board-k,1))} /* centred by its left, not a translate, which the scale would stretch */
+#app.tfBoard #homeView>.grid .tfEditGrip svg{width:20px;height:20px}
 #app.tfBoard #homeView>.grid .tfEditChip{transform-origin:100% 0;scale:calc(1 / var(--board-k,1))}
 #app.tfBoard #homeView>.grid .tfFavHide{transform-origin:50% 50%;scale:calc(1 / var(--board-k,1))}
 #app.tfBoard #homeView>.grid .tfBoardMenu{transform-origin:100% 0;scale:calc(1 / var(--board-k,1))}
