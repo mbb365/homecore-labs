@@ -1314,6 +1314,7 @@ button.tfAreaIcon{cursor:pointer}
 .hcCeRow.hcCeBare{grid-template-columns:36px minmax(0,1fr) auto}
 .hcCeRow.hcCeFixed>span:first-child{width:36px}
 .hcCeGroup>.tfTrayNote{margin:-2px 0 6px}
+.hcCeWarn{color:var(--text)}
 /* a card's parts dragged into place on the card (Matt, 20 Nov): the one dragged lifted, the one it'll land on marked */
 #app.hcCardEditing .hcCardEdited :is([data-ce-item],[data-k^="fav:"]){cursor:grab}
 #app.hcCardEditing .hcCardEdited .hcCeDragging{position:relative;z-index:6;opacity:.92;filter:drop-shadow(0 8px 24px rgba(0,0,0,.3));cursor:grabbing;pointer-events:none}

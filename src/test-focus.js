@@ -3287,7 +3287,8 @@ export function mountTestFocus(root, { config, getHass }) {
       // the first control shown comes first; a short tile shows only it
       const all = inCardOrder(key, controlsOf(key));
       return group('Shown', '<ul class="hcHeList">' + ceShow('', 'State under the name', valueOf(key), !off.has('state'), 'data-ce-hide="state"', false) +
-        all.map((p) => ceShow('', partName(key, p), '', !off.has(p), 'data-ce-hide="' + esc(p) + '"', false, p)).join('') + '</ul>', all.length > 1 ? DRAG_NOTE + ' The first comes first; a short tile shows only it.' : '');
+        all.map((p) => ceShow('', partName(key, p), '', !off.has(p), 'data-ce-hide="' + esc(p) + '"', false, p)).join('') + '</ul>',
+        (all.length > 1 ? DRAG_NOTE + ' The first comes first; a short tile shows only it. ' : '') + '<span class="hcCeWarn">Showing more makes the tile taller, which can move the cards under it.</span>');
     }
     return '';
   }
@@ -3323,7 +3324,17 @@ export function mountTestFocus(root, { config, getHass }) {
       if (t.dataset.ceBg === 'colour' && !c.bg) { setCard(key, { bg: rgbHex(parseColour(getComputedStyle(faceOf(grid.querySelector(cardSel(key)))).backgroundColor).slice(0, 3)) }); try { tray.querySelector('[data-ce-colour="bg"]')?.showPicker(); } catch (_e) { /* a press on the swatch opens it */ } }
       else if (t.dataset.ceBg === 'theme') setCard(key, { bg: null });
     } else if (t.dataset.ceStroke) setCard(key, { stroke: t.dataset.ceStroke === 'system' ? null : t.dataset.ceStroke === 'none' ? 'none' : Number(t.dataset.ceStroke) });
-    else if (t.dataset.ceHide) { if (off.has(t.dataset.ceHide)) off.delete(t.dataset.ceHide); else off.add(t.dataset.ceHide); setCard(key, { hidden: off.size ? [...off] : null }, true); }
+    else if (t.dataset.ceHide) {
+      const showing = off.has(t.dataset.ceHide);
+      if (showing) off.delete(t.dataset.ceHide); else off.add(t.dataset.ceHide);
+      setCard(key, { hidden: off.size ? [...off] : null }, true);
+      // a tile's control shown that its height can't hold: the tile grows a row for it (and shrinks again as one's hidden,
+      // sizeOf keeping to what it holds); the cards under it move down (the page says so)
+      if (showing && cardKind(key) === 'device' && t.dataset.ceHide !== 'state') {
+        const need = Math.min(ROWS_MOST, cardControls(key).length + 1), d = dashPrefs();
+        if (sizeOf(key) < need) { saveDash({ ...d, opts: { ...d.opts, [key]: { ...(d.opts[key] || {}), h: need, tall: undefined } } }); refresh(); layoutBoard(); toast(boardName(key) + ' is now ' + SIZE_NAMES[need - 1]); }
+      }
+    }
     else if (t.dataset.ceMain) {
       if (key === 'energy') energyPick = t.dataset.ceMain; // the graph moves to it now too
       setCard(key, { main: t.dataset.ceMain }, true);
