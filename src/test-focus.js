@@ -11,6 +11,7 @@ import { createHouse, isMadeUp, solarHistory, PLANT_RANGE } from './house.js';
 import { ICONS as HC_ICONS, svg as hcSvg } from './hc-icons.js';
 import { mountWeatherBento } from './weather-bento.js';
 import { createCoverArt, coverKind } from './cover-art.js';
+import { cardInk, parseColour, hexRgb, rgbHex } from './look.js';
 import { M, EASE, smoothD, gridLines, drawLine, stretchTo, closeDialog, toastBody, toastIn, toaster, springStep, squash, reduced } from './motion.js';
 // HomeCore's icon for a Material Design one, by name (19 Nov); the demo's own inline icons use it too (demo-icons.js)
 export const HC_FROM_MDI = {
@@ -913,6 +914,8 @@ export function mountTestFocus(root, { config, getHass }) {
     // XS its head (Matt, 2 Nov)
     const s = specFor(id), dac = id.startsWith('light.') && dacFor(id) && !(only && sizeOf(id) < 3), keep = only || (inDialog && id.startsWith('light.') ? ['bright'] : null);
     const sections = dac ? ['<div class="tfDacPad" data-dac="' + (inDialog ? 'more:' : only ? 'dash:' : 'tile:') + esc(id) + '"></div>']
+      // on the board, in the order given (a light's main control first, Edit tile)
+      : only ? only.map((p) => s.sections[(s.parts || []).indexOf(p)]).filter(Boolean)
       : s.sections.map((sec, i) => (sec && (!keep || keep.includes((s.parts || [])[i])) ? sec : '')).filter(Boolean);
     return '<div class="tfAction' + (dac ? ' tfDac' : '') + (s.on ? ' on' : '') + (!dac && !sections.length ? ' tfHeadOnly' : '') + '" data-k="' + esc(id) + '"' + (s.tone ? ' data-tone="' + s.tone + '"' : '') + lightAttrs(id) + '>' +
       '<div class="tfActionHead">' + iconButton(id, s) + nameButton(id) + '</div>' + sections.join('') + '</div>';
@@ -1262,10 +1265,12 @@ export function mountTestFocus(root, { config, getHass }) {
   const isRoomKey = (key) => key.startsWith('room:');
   const roomOf = (key) => areaRooms.find((r) => 'room:' + r.id === key);
   function roomTile(r, key, attrs = '') {
-    const keys = roomKeys(r), main = mainOf(r), h = main && headline(main), sub = main ? mainSub(r, main, keys) : '';
+    // a tile on the board keeps its own devices and main reading (Edit tile); the Areas card's open area doesn't
+    const own = key ? cardOf(key) : {}, off = new Set(own.hidden || []);
+    const keys = roomKeys(r), main = (states[own.main] && own.main) || mainOf(r), h = main && headline(main), sub = main ? mainSub(r, main, keys) : '';
     const big = h ? h.text + (h.unit ? ' ' + h.unit : '') : '';
     const opens = (k) => { const ids = groupIds(r, k.key); return ids.length === 1 ? ids[0] : 'group:' + r.id + ':' + k.key; };
-    const controls = keys.filter((k) => k.kind === 'control').slice(0, 4), lit = (k) => (k.on && k.light ? ' data-light style="' + k.light + '"' : '');
+    const controls = keys.filter((k) => k.kind === 'control' && !off.has(k.key)).slice(0, 4), lit = (k) => (k.on && k.light ? ' data-light style="' + k.light + '"' : '');
     /* the rule (Matt, 20 Nov: "If it is just an icon, it opens the panel or more info that controls that. if it is a tile
        with name and subtitle etc then it opens the more info and the icon in the tile becomes the binary toggle like it is
        (if defined by the device/entity)"): an icon on its own opens what it stands for (the room's lights panel, the
@@ -1628,6 +1633,8 @@ export function mountTestFocus(root, { config, getHass }) {
   // Energy today's sources are a glance, and tapping one shows its day in the graph, in place: the card never moves
   // (Matt, 27 Oct; since 31 Oct its use by the hour, the bars rising as in the HomeCore motion lab)
   let energyPick = null, energyTiles = [];
+  // a source's amount today, as its tile shows it
+  const energyAmount = (t) => Number(t.value).toLocaleString(undefined, { maximumFractionDigits: t.value < 10 ? 2 : 1 }) + ' ' + t.unit;
   function energyGlance() {
     const tiles = energyTiles = energy?.length ? energy : MADE_UP_ENERGY.map(([key, name, value, unit]) => {
       if (key === 'solar') { const sun = Object.keys(states).find((x) => x.endsWith('_solar_today') && !x.includes('made_up_energy')); if (sun && Number.isFinite(Number(states[sun].state))) value = Number(states[sun].state); }
@@ -1636,15 +1643,17 @@ export function mountTestFocus(root, { config, getHass }) {
       return { key, name, id, value, unit };
     });
     energyText.clear();
-    if (!tiles.some((t) => t.id === energyPick)) energyPick = tiles[0].id;
-    const rows = tiles.map((t) => {
-      const text = Number(t.value).toLocaleString(undefined, { maximumFractionDigits: t.value < 10 ? 2 : 1 }) + ' ' + t.unit, icon = ENERGY_ICON[t.key], on = t.id === energyPick;
+    // the sources Edit card leaves on, the graph on its main one to start with
+    const own = cardOf('energy'), off = new Set(own.hidden || []), shown = tiles.filter((t) => !off.has(t.id)).length ? tiles.filter((t) => !off.has(t.id)) : tiles;
+    if (!shown.some((t) => t.id === energyPick)) energyPick = (shown.find((t) => t.id === own.main) || shown[0]).id;
+    const rows = shown.map((t) => {
+      const text = energyAmount(t), icon = ENERGY_ICON[t.key], on = t.id === energyPick;
       energyText.set(t.id, { name: t.name, text, icon });
       return '<div class="activityRow tap' + (on ? ' picked' : '') + '" role="button" tabindex="0" data-energy-pick="' + esc(t.id) + '" aria-pressed="' + on + '" aria-label="' + esc(t.name + ', ' + text) + '. Show its day in the graph">' +
         '<div class="tfIcon" aria-hidden="true"' + iconSlot('', icon, t.name) + '></div><div><div class="activityRowName">' + esc(t.name) + '</div><div class="activityRowMeta">' + esc(text) + '</div></div></div>';
     });
     // the picked source's day as a graph, above the glance or below it (its ⋯ in edit mode)
-    const pick = tiles.find((t) => t.id === energyPick), below = (dashPrefs().opts.energy?.graph || 'above') === 'below';
+    const pick = shown.find((t) => t.id === energyPick), below = (dashPrefs().opts.energy?.graph || 'above') === 'below';
     const graph = '<div class="tfCardGraph tfDashGraph"><svg class="tfGraph" data-graph="' + esc(pick.id) + '" role="img" aria-label="' + esc(pick.name) + ', last 24 hours"></svg></div>';
     return card('dash:energy', 0, 'Energy today', rows, graph, summaryData().some((x) => x.key === 'energy') ? 'summary:energy' : null, 'tfDashCard tfDash-energy' + (below ? '' : ' graphAbove'));
   }
@@ -1732,7 +1741,14 @@ export function mountTestFocus(root, { config, getHass }) {
   // a tile on the dashboard shows one control more for each row past its head: at XS none, at S its first (a light's
   // brightness, a thermostat's target, a cover's position…), at M its first two, and so on
   const controlsOf = (id) => { const s = specFor(id); return s.sections.map((sec, i) => sec && (s.parts || [])[i]).filter(Boolean); };
-  const dashControl = (id) => controlsOf(id).slice(0, sizeOf(id) - 1);
+  const dashControl = (id) => cardControls(id).slice(0, sizeOf(id) - 1);
+  // a tile's controls on the board: a light's as Edit tile leaves them, its main one first; the rest all of theirs
+  function cardControls(id) {
+    const all = controlsOf(id);
+    if (!id.startsWith('light.')) return all;
+    const own = cardOf(id), off = new Set(own.hidden || []), shown = all.filter((p) => !off.has(p));
+    return shown.includes(own.main) ? [own.main, ...shown.filter((p) => p !== own.main)] : shown;
+  }
   function dashTileIds(n) {
     const own = dashPrefs().tiles;
     if (own) return own.filter((id) => states[id] || roomOf(id));
@@ -1842,7 +1858,7 @@ export function mountTestFocus(root, { config, getHass }) {
   const WIDTH_NAMES = ['Narrow', 'Wide', 'Really wide'];
   const SIZES = { wx: 5, areas: 5, favs: 5, act: 5, energy: 4, avg: 4, aq: 4, pollen: 4, radar: 4, hourly: 4, sun: 4, moon: 4, uv: 4, humidity: 4, pressure: 4, wind: 4, visibility: 4 };
   // a tile whose entity isn't in the states yet keeps its saved height (it can't be measured, and must never stop the board)
-  const mostRows = (key) => (!key.includes('.') || !states[key] || (key.startsWith('light.') && wantsDac(key)) ? ROWS_MOST : Math.min(ROWS_MOST, controlsOf(key).length + 1));
+  const mostRows = (key) => (!key.includes('.') || !states[key] || (key.startsWith('light.') && wantsDac(key)) ? ROWS_MOST : Math.min(ROWS_MOST, cardControls(key).length + 1));
   const sizeOf = (key) => {
     const o = dashPrefs().opts[key] || {}, most = mostRows(key), h = Number(o.h) || (o.tall ? 5 : SIZES[key] || TILE_ROWS);
     return Math.max(1, Math.min(most, h));
@@ -1853,6 +1869,14 @@ export function mountTestFocus(root, { config, getHass }) {
   const boardName = (key) => BOARD_NAMES[key] || (key.startsWith('room:') ? areaRooms.find((r) => 'room:' + r.id === key)?.name || 'Area' : nameOf(key));
   const AREA_FOLDED = 128;
   let editing = false, drag = null, boardOpen = null, fitQueued = false, lastPlaced = new Map(), boardRows = 0, boardTop = 0;
+  let cardEdit = null; // the card whose own page is open in the edit tray (Edit card), by its key
+  const cardStyle = document.createElement('style'); // each card's own look
+  root.appendChild(cardStyle);
+  const cardSel = (key) => '[data-hc-card="' + String(key).replace(/["\\]/g, '\\$&') + '"]';
+  // what's painted as the card: a card or tile itself; the weather widgets and Areas hold theirs
+  const FACES = ':is(.wbCard,.tfAreaPanel)';
+  const faceOf = (el) => (el?.matches('.tfDashBento,.tfAreas') ? el.querySelector('.wbCard,.tfAreaPanel') : el);
+  const rgbaOf = (c, a) => 'rgba(' + c.slice(0, 3).map(Math.round).join(',') + ',' + +a.toFixed(3) + ')';
   // the page's header, above the grid at its own size (the cards' rules: padding 10, tiles 60, so a bar of summaries is
   // 80 or 140 and never fits the grid's rows; Matt, 27 Oct: "we have rules to follow")
   const HEAD = ['title', 'sums'];
@@ -2037,6 +2061,9 @@ export function mountTestFocus(root, { config, getHass }) {
     if (pen && overview) { pen.hidden = !board; if (!homeEditing) { pen.classList.remove('active'); pen.setAttribute('aria-pressed', 'false'); pen.setAttribute('aria-label', 'Edit Home page'); pen.title = 'Edit'; pen.innerHTML = PENCIL; } }
     else if (pen) { pen.hidden = !board || phone; pen.classList.toggle('active', editing); pen.setAttribute('aria-pressed', String(editing)); pen.setAttribute('aria-label', overview ? 'Edit Home page' : editing ? 'Done editing' : 'Edit custom dashboard'); pen.title = editing ? 'Done' : 'Edit'; pen.innerHTML = editing ? TICK : PENCIL; }
     const items = board ? boardItems() : [];
+    // each card's own look (Edit card) finds it by its key
+    items.forEach((it) => { it.el.dataset.hcCard = it.key; it.el.classList.toggle('hcCardEdited', it.key === cardEdit); });
+    paintCards();
     if (!board || !overview) grid.querySelectorAll(':scope > :is(.hcFloor,.hcFloorBox)').forEach((el) => el.remove()); // Home's floor names and boxes
     if (!board) {
       grid.style.height = '';
@@ -2119,6 +2146,7 @@ export function mountTestFocus(root, { config, getHass }) {
     items.forEach((it) => itemSizes.observe(it.el));
     drawDashGraph();
     renderTray();
+    if (cardEdit) requestAnimationFrame(slideBoard);
   }
   /* Home's own layout (Matt, 12 Nov, from his Figma "Home (overview)": "all these cards are for the DEFAULT homepage, not
      part of the rules for the wider system"). Columns up to 252 wide and 20 apart, five at most; every card 337 tall
@@ -2469,7 +2497,7 @@ export function mountTestFocus(root, { config, getHass }) {
   let editStart = ''; // the page's settings when edit mode began
   function setEditing(on) {
     editing = on;
-    if (!on) { drag = null; trayPicking = tilePicking = false; closeBoardMenu(); }
+    if (!on) { drag = null; trayPicking = tilePicking = false; closeBoardMenu(); closeCardEditor(false); }
     layoutBoard();
     if (on) { editStart = JSON.stringify(prefs); trayPage(tray, 'Edit custom dashboard', null); } // a phone starts at the list
     else if (editStart && JSON.stringify(prefs) !== editStart) toast('Changes saved');
@@ -2494,7 +2522,8 @@ export function mountTestFocus(root, { config, getHass }) {
     // a room's tile too (Matt, 6 Nov): narrow, wide or really wide, like the cards
     const width = RESIZABLE.includes(key) || isRoomKey(key) ? '<div class="tfHeight tfWidth" role="group" aria-label="Width"><span class="tfHeightLabel" aria-hidden="true">Width</span><div class="tfHeightTabs">' +
       WIDTH_NAMES.map((name, i) => '<button type="button" role="menuitemradio" aria-checked="' + (i + 1 === Math.min(span, n)) + '" aria-label="' + name + ', ' + (i + 1) + (i ? ' columns' : ' column') + '" data-board-act="w:' + (i + 1) + '"' + (i < n ? '' : ' disabled') + '>' + name + '</button>').join('') + '</div></div>' : '';
-    menu.innerHTML = height + width +
+    // Edit card: the card's own page in the edit tray (Matt, 20 Nov), after its size
+    menu.innerHTML = height + width + item('edit', tile ? 'Edit tile' : 'Edit card') +
       (key === 'energy' ? item('graph', (dash.opts.energy?.graph || 'above') === 'above' ? 'Graph below' : 'Graph above') : '') +
       item('left', 'Move left', full || p.col === 0) + item('right', 'Move right', full || p.col + p.cols >= n) +
       item('up', 'Move up', p.row <= 0) + item('down', 'Move down') + (tile ? item('remove', 'Remove') : item('hide', 'Hide'));
@@ -2515,6 +2544,7 @@ export function mountTestFocus(root, { config, getHass }) {
   const cellsNow = () => Object.fromEntries([...lastPlaced].map(([k, p]) => [k, { col: p.col, row: p.row }]));
   function boardAct(key, act) {
     if (act === 'remove') { closeBoardMenu(); removeTile(key); return; }
+    if (act === 'edit') { closeBoardMenu(); openCardEditor(key); return; }
     const before = prefs, dash = dashPrefs(), cells = cellsNow(), here = cells[key] || { col: 0, row: 0 };
     if (act.startsWith('w:')) dash.spans = { ...dash.spans, [key]: act === 'w:full' ? 'full' : Number(act.slice(2)) };
     if (act.startsWith('h:')) dash.opts = { ...dash.opts, [key]: { ...(dash.opts[key] || {}), h: Number(act.slice(2)), tall: undefined } };
@@ -2771,6 +2801,8 @@ export function mountTestFocus(root, { config, getHass }) {
     '<div class="tabs rubberTabs hcTrayTabs" role="tablist" aria-label="Edit custom dashboard"><div class="rubberIndicator" aria-hidden="true"></div>' +
       TRAY_TABS.map(([k, t], i) => '<button class="tab segBtn' + (i ? '' : ' active') + '" type="button" role="tab" aria-selected="' + !i + '" data-tray-tab="' + k + '">' + t + '</button>').join('') + '</div>' +
     trayListHtml(TRAY_TABS, 'data-tray-go') +
+    // a card's own page (Edit card), in place of the tabs while it's open
+    '<section class="hcCardEdit" data-tray="cardedit" aria-live="off"></section>' +
     '<section class="tfTraySection" data-tray="welcome"></section>' +
     '<section class="tfTraySection" data-tray="cards"></section>' +
     '<section class="tfTraySection" data-tray="weather"></section>' +
@@ -3050,6 +3082,7 @@ export function mountTestFocus(root, { config, getHass }) {
     if (trayPicking) trayPut('pick', pickHtml(tray.querySelector('[data-fav-search]').value, (id) => PICK_DOMAINS.test(id), new Set(starred()), 'data-fav-pick'));
     trayPut('suggest', '<div><strong>Show suggestions</strong><div class="status">Fills the card after your favourites.</div></div>' +
       '<button class="switch' + (suggestOn() ? ' on' : '') + '" type="button" role="switch" aria-checked="' + suggestOn() + '" data-fav-suggest aria-label="Show suggestions"></button>');
+    if (cardEdit) drawCardEditor();
   }
   const saveFavs = (next) => { prefs = { ...prefs, ...next }; savePrefs(); refresh(); renderTray(); };
   function setFavShown(id, show) {
@@ -3064,12 +3097,219 @@ export function mountTestFocus(root, { config, getHass }) {
     toast(nameOf(id) + ' removed from favourites', undoTo(before));
   };
   const addFav = (id) => { saveFavs({ favourites: [...starred().filter((x) => x !== id), id], favHidden: (prefs.favHidden || []).filter((x) => x !== id) }); toast(nameOf(id) + ' added to favourites'); };
+  /* ---------- a card's own page (Matt, 20 Nov: "complete control over cards") ----------
+     Edit card (Edit tile on a tile) in a card's ⋯ opens the card's own page in the edit tray, ‹ back to the tray. Every
+     card and tile: its background (the theme's or a colour) and how much of it shows, and its stroke (the system's, none,
+     or 1 to 3 px) and the stroke's colour; text turns light or dark to suit, as Appearance's does. Some say what they
+     show and what leads: Favourites which favourites, an area's tile its devices and main reading, Energy today its
+     sources and the one its graph opens on, a light's tile its controls and the one first (a short tile shows only that).
+     The card stays live on the board, the rest faded; the board slides left if the tray's over it. Kept with the board,
+     prefs.dash.opts[key].card */
+  function cardOf(key) { return dashPrefs().opts[key]?.card || {}; }
+  const PART_NAMES = { bright: 'Brightness', ct: 'Warmth', hue: 'Colour' };
+  const cardKind = (key) => (key === 'favs' ? 'favs' : key === 'energy' ? 'energy' : isRoomKey(key) ? 'room' : key.startsWith('light.') && states[key] && !wantsDac(key) ? 'light' : null);
+  function paintCards() {
+    const opts = overview ? {} : boardPrefs().opts, cs = getComputedStyle(app);
+    const ground = parseColour(cs.getPropertyValue('--bg').trim() || cs.getPropertyValue('--color-bg-ground').trim() || '#000');
+    const css = Object.entries(opts).map(([key, o]) => {
+      const c = o?.card;
+      if (!c) return '';
+      // three ids outweigh Appearance's rules; its outline only out of edit mode, or while this page is open
+      const on = '#app#app#app:not(.tfOverview) ', seen = '#app#app#app:not(.tfOverview):is(:not(.tfEditing),.hcCardEditing) ', at = cardSel(key);
+      const faces = (pre) => pre + at + ':not(.tfDashBento,.tfAreas),' + pre + at + ' ' + FACES;
+      let out = '';
+      if (c.bg || c.opacity != null) {
+        const base = c.bg ? [...hexRgb(c.bg), 1] : parseColour(cs.getPropertyValue('--card').trim() || '#000'), a = c.opacity != null ? c.opacity / 100 : base[3];
+        const ink = cardInk(base.slice(0, 3), a, ground.slice(0, 3)), fill = rgbaOf(base, a);
+        // names and titles: light mode's title grey (#55504A) on a light card, the text colour on a dark one
+        // and the icons' chips as the light or dark theme has them, whichever suits (#app sets them from its own text)
+        const dark = ink.text === '#d9d9d9', title = dark ? ink.text : '#55504a', chips = dark ? ';--hc-icon:#3a3a3a;--hc-icon-ink:#d9d9d9' : ';--hc-icon:#e6e6e6;--hc-icon-ink:#55504a';
+        out += faces(on) + '{--card:' + fill + ';--group-bg:' + fill + ';--text:' + ink.text + ';--muted:' + ink.muted + ';--tile:' + ink.tile + ';--title:' + title + chips + ';color:var(--text)' +
+          (a > 0 && a < 1 ? ';-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)' : '') + '}' +
+          // what sits in it (the open area's tile, a weather card's insides) reads on it too
+          on + at + ' :is(.tfAction,.card,.workoutPanel,.wbCard){--text:' + ink.text + ';--muted:' + ink.muted + ';--tile:' + ink.tile + ';--title:' + title + chips + '}';
+      }
+      const line = c.line && c.stroke !== 'none' ? c.line : null;
+      if (line) out += faces(on) + '{--line:' + line + ';--lineb:' + line + ';--hc-hair:inset 0 0 0 .2px ' + line + ',inset 0 -.2px 0 ' + line + ';--hc-hair-all:inset 0 0 0 .4px ' + line + '}';
+      if (c.stroke === 'none') out += faces(on) + '{border-color:transparent!important;box-shadow:none!important}' + faces(seen) + '{outline:none!important}';
+      else if (c.stroke) out += faces(seen) + '{outline:' + c.stroke + 'px solid ' + (line || 'var(--line)') + '!important;outline-offset:-' + c.stroke + 'px!important}';
+      return out;
+    }).join('');
+    if (cardStyle.textContent !== css) cardStyle.textContent = css;
+  }
+  // the light or dark theme changing changes what's under a card that lets the background through
+  new MutationObserver(() => paintCards()).observe(app, { attributes: true, attributeFilter: ['class'] });
+  // saves a card's own settings; what it shows changing draws it again
+  function setCard(key, patch, redraw = false) {
+    const dash = dashPrefs(), { card: was, ...rest } = dash.opts[key] || {}, next = { ...(was || {}), ...patch };
+    Object.keys(next).forEach((k) => { if (next[k] == null) delete next[k]; });
+    saveDash({ ...dash, opts: { ...dash.opts, [key]: Object.keys(next).length ? { ...rest, card: next } : rest } });
+    if (redraw) { if (key === 'energy') units.delete('dash:energy'); refresh(); layoutBoard(); } else paintCards();
+    drawCardEditor();
+  }
+  // where the tray is over the card, the board slides left until it isn't (no further than the rail)
+  function slideBoard() {
+    if (!cardEdit) { grid.style.translate = ''; return; }
+    const el = grid.querySelector(cardSel(cardEdit)), inner = tray.querySelector('.tfTrayInner');
+    if (!el || !inner) return;
+    // where the card is with the board unslid, from the layout (the board may be part way through sliding)
+    const left = (grid.offsetParent?.getBoundingClientRect().left || 0) + grid.offsetLeft + (el.offsetParent === grid ? el.offsetLeft : parseFloat(el.style.left) || 0);
+    const edge = inner.getBoundingClientRect().left, rail = root.querySelector('.hcRail')?.getBoundingClientRect().right || 0;
+    const over = left + el.offsetWidth + 24 - edge, room = left - rail - 24;
+    grid.style.translate = over > 0 && room > 0 ? -Math.round(Math.min(over, room)) + 'px 0' : '';
+  }
+  function openCardEditor(key) {
+    cardEdit = key;
+    trayTucked = false;
+    tray.classList.add('hcTrayCard');
+    app.classList.add('hcCardEditing');
+    trayHtml.cardedit = null;
+    layoutBoard();
+    tray.querySelector('.tfTrayInner').scrollTop = 0;
+    grid.querySelector(cardSel(key))?.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
+    tray.querySelector('.hcTrayBack')?.focus({ preventScroll: true });
+  }
+  function closeCardEditor(refocus = true) {
+    if (!cardEdit) return;
+    const key = cardEdit;
+    cardEdit = null;
+    tray.classList.remove('hcTrayCard');
+    app.classList.remove('hcCardEditing');
+    grid.style.translate = '';
+    grid.querySelectorAll('.hcCardEdited').forEach((el) => el.classList.remove('hcCardEdited'));
+    trayPage(tray, 'Edit custom dashboard', null);
+    if (!refocus) return;
+    layoutBoard();
+    grid.querySelector('[data-board-more="' + CSS.escape(key) + '"]')?.focus({ preventScroll: true });
+  }
+  const ceLine = (label, html, attr = '') => '<div class="hcHeLine hcCeLine"' + attr + '><span class="activityRowName">' + esc(label) + '</span><span class="hcCeEnd">' + html + '</span></div>';
+  const ceSeg = (label, attr, value, opts) => '<div class="themeChoice hcHeChoice" role="group" aria-label="' + esc(label) + '">' +
+    opts.map(([v, text]) => '<button class="wxLayoutBtn" type="button" ' + attr + '="' + esc(v) + '" aria-pressed="' + (String(value) === v) + '">' + esc(text) + '</button>').join('') + '</div>';
+  const ceSwatch = (k, label) => '<label class="hcSwatch"><input type="color" data-ce-colour="' + k + '" aria-label="' + esc(label) + '"></label>';
+  // a row that shows or hides something in the card; the last one shown can't go
+  const chip = (slot) => '<span class="tfIcon"' + slot + '></span>';
+  const ceShow = (icon, name, meta, on, attr, last) => '<li class="hcCeRow' + (icon ? '' : ' hcCeBare') + '">' + icon +
+    '<span class="tfTrayName"><span class="activityRowName">' + esc(name) + '</span>' + (meta ? '<span class="activityRowMeta">' + esc(meta) + '</span>' : '') + '</span>' +
+    '<button class="switch' + (on ? ' on' : '') + '" type="button" role="switch" aria-checked="' + on + '" aria-label="Show ' + esc(name) + '" ' + attr + (on && last ? ' disabled' : '') + '></button></li>';
+  // the main one: side by side when there are few, else a list to pick from
+  const ceMain = (label, value, opts) => (opts.length < 2 ? '' : opts.length <= 4 && opts.every(([, t]) => t.length <= 14)
+    ? '<div class="hcHeLine hcHeChoiceLine"><span class="activityRowName">' + esc(label) + '</span>' + ceSeg(label, 'data-ce-main', value, opts.map(([v, t]) => [v, t])) + '</div>'
+    : '<div class="sectionLabel hcCeSub">' + esc(label) + '</div><div class="hcHeList" role="radiogroup" aria-label="' + esc(label) + '">' + opts.map(([v, t, meta, icon]) =>
+      '<button class="hcCeRow hcCePick' + (icon ? '' : ' hcCeBare') + '" type="button" role="radio" aria-checked="' + (v === value) + '" data-ce-main="' + esc(v) + '">' + (icon || '') +
+      '<span class="tfTrayName"><span class="activityRowName">' + esc(t) + '</span>' + (meta ? '<span class="activityRowMeta">' + esc(meta) + '</span>' : '') + '</span><span class="hcCeTick" aria-hidden="true">' + TICK + '</span></button>').join('') + '</div>');
+  // what the card shows, and its main, for the cards that have them
+  function cardContent(key) {
+    const own = cardOf(key), off = new Set(own.hidden || []), kind = cardKind(key);
+    const group = (label, body) => '<div class="hcCeGroup"><div class="sectionLabel">' + label + '</div>' + body + '</div>';
+    if (kind === 'favs') {
+      const hidden = new Set(prefs.favHidden || []), stars = starred(), shown = stars.filter((id) => !hidden.has(id)).length + (suggestOn() ? 1 : 0);
+      return group('Shown', '<ul class="hcHeList">' + stars.map((id) => ceShow(chip(iconSlot(id, iconFor(id))), nameOf(id), whereIs.get(id) || '', !hidden.has(id), 'data-ce-fav="' + esc(id) + '"', shown < 2)).join('') + '</ul>' +
+        ceLine('Suggestions', '<button class="switch' + (suggestOn() ? ' on' : '') + '" type="button" role="switch" aria-checked="' + suggestOn() + '" aria-label="Show suggestions" data-ce-suggest' + (suggestOn() && shown < 2 ? ' disabled' : '') + '></button>'));
+    }
+    if (kind === 'energy') {
+      const tiles = energyTiles.length ? energyTiles : [], shown = tiles.filter((t) => !off.has(t.id));
+      return group('Shown', '<ul class="hcHeList">' + tiles.map((t) => ceShow(chip(iconSlot('', ENERGY_ICON[t.key], t.name)), t.name, energyAmount(t), !off.has(t.id), 'data-ce-hide="' + esc(t.id) + '"', shown.length < 2)).join('') + '</ul>') +
+        group('Main', ceMain('Graph', shown.some((t) => t.id === own.main) ? own.main : shown[0]?.id, shown.map((t) => [t.id, t.name, energyAmount(t), chip(iconSlot('', ENERGY_ICON[t.key], t.name))])));
+    }
+    if (kind === 'room') {
+      const r = roomOf(key);
+      if (!r) return '';
+      const keys = roomKeys(r), controls = keys.filter((k) => k.kind === 'control');
+      const reads = [...r.readings, ...r.actions.filter((id) => /^climate\./.test(id)), ...r.solar].filter((id, i, all) => states[id] && all.indexOf(id) === i);
+      const main = (states[own.main] && own.main) || mainOf(r);
+      return (controls.length ? group('Shown', '<ul class="hcHeList">' + controls.map((k) => ceShow('<span class="tfIcon">' + k.icon + '</span>', k.label, k.value, !off.has(k.key), 'data-ce-hide="' + esc(k.key) + '"', false)).join('') + '</ul>') : '') +
+        (reads.length > 1 ? group('Main', ceMain('Main reading', main, reads.map((id) => [id, inRoom(r, id), valueOf(id), chip(iconSlot(id))]))) : '');
+    }
+    if (kind === 'light') {
+      const all = controlsOf(key), shown = cardControls(key);
+      return all.length ? group('Shown', '<ul class="hcHeList">' + all.map((p) => ceShow('', PART_NAMES[p] || cap(p), '', !off.has(p), 'data-ce-hide="' + esc(p) + '"', false)).join('') + '</ul>') +
+        group('Main', ceMain('First', shown[0], shown.map((p) => [p, PART_NAMES[p] || cap(p)])) || '<p class="tfTrayNote">' + (shown.length ? 'Its one control comes first.' : 'Nothing shown but its name.') + '</p>') : '';
+    }
+    return '';
+  }
+  function drawCardEditor() {
+    if (!cardEdit) return;
+    const key = cardEdit, c = cardOf(key), stroke = c.stroke == null ? 'system' : String(c.stroke);
+    tray.querySelector('.tfTrayHead .activityTitle').textContent = 'Edit ' + boardName(key);
+    trayPut('cardedit', '<div class="hcCeGroup"><div class="sectionLabel">Look</div>' +
+      ceLine('Background', ceSeg('Background', 'data-ce-bg', c.bg ? 'colour' : 'theme', [['theme', 'Theme'], ['colour', 'Colour']]) + (c.bg ? ceSwatch('bg', 'Background colour') : '')) +
+      ceLine('Opacity', '<span class="hcRangeWrap"><span class="hcRangeValue" data-ce-value="opacity"></span><span class="tfBar pos hcLookBar" role="slider" tabindex="0" aria-label="Background opacity" aria-valuemin="0" aria-valuemax="100" data-ce-bar="opacity"><i></i></span></span>') +
+      ceLine('Stroke', ceSeg('Stroke', 'data-ce-stroke', stroke, [['system', 'System'], ['none', 'None'], ['1', '1 px'], ['2', '2 px'], ['3', '3 px']])) +
+      (stroke === 'none' ? '' : ceLine('Stroke colour', ceSwatch('line', 'Stroke colour'))) + '</div>' +
+      cardContent(key) +
+      '<div class="hcCeGroup">' + ceLine('Back to how it was', '<button class="pill" type="button" data-ce-reset' + (Object.keys(c).length ? '' : ' disabled') + '>Reset</button>') + '</div>');
+    syncCardEditor();
+  }
+  // the values that change as they're dragged or picked, set on the controls rather than drawn again
+  function syncCardEditor() {
+    const sec = tray.querySelector('[data-tray="cardedit"]'), face = faceOf(grid.querySelector(cardSel(cardEdit)));
+    if (!sec || !face) return;
+    const fs = getComputedStyle(face), c = cardOf(cardEdit), bg = parseColour(fs.backgroundColor), line = parseColour(fs.getPropertyValue('--line').trim() || '#808080');
+    // the system's line is see-through: its swatch shows it as it looks on the card
+    const lineSeen = line.slice(0, 3).map((v, i) => v * line[3] + bg[i] * (1 - line[3]));
+    const val = { bg: c.bg || rgbHex(bg.slice(0, 3)), line: c.line || rgbHex(lineSeen), opacity: c.opacity ?? Math.round((parseColour(getComputedStyle(app).getPropertyValue('--card').trim() || '#000')[3]) * 100) };
+    sec.querySelectorAll('[data-ce-colour]').forEach((el) => { if (root.activeElement !== el) el.value = val[el.dataset.ceColour]; });
+    sec.querySelectorAll('[data-ce-bar]').forEach((el) => { const v = val[el.dataset.ceBar]; el.querySelector('i').style.width = v + '%'; el.setAttribute('aria-valuenow', v); el.setAttribute('aria-valuetext', v + '%'); });
+    sec.querySelectorAll('[data-ce-value]').forEach((el) => { el.textContent = val[el.dataset.ceValue] + '%'; });
+  }
+  function cardEditClick(t) {
+    const key = cardEdit, c = cardOf(key), off = new Set(c.hidden || []), mark = [...t.attributes].find((a) => a.name.startsWith('data-ce-'));
+    if (t.dataset.ceBg) {
+      // Colour starts from the colour it has, so nothing changes until one's picked
+      if (t.dataset.ceBg === 'colour' && !c.bg) { setCard(key, { bg: rgbHex(parseColour(getComputedStyle(faceOf(grid.querySelector(cardSel(key)))).backgroundColor).slice(0, 3)) }); try { tray.querySelector('[data-ce-colour="bg"]')?.showPicker(); } catch (_e) { /* a press on the swatch opens it */ } }
+      else if (t.dataset.ceBg === 'theme') setCard(key, { bg: null });
+    } else if (t.dataset.ceStroke) setCard(key, { stroke: t.dataset.ceStroke === 'system' ? null : t.dataset.ceStroke === 'none' ? 'none' : Number(t.dataset.ceStroke) });
+    else if (t.dataset.ceHide) { if (off.has(t.dataset.ceHide)) off.delete(t.dataset.ceHide); else off.add(t.dataset.ceHide); setCard(key, { hidden: off.size ? [...off] : null }, true); }
+    else if (t.dataset.ceMain) {
+      if (key === 'energy') energyPick = t.dataset.ceMain; // the graph moves to it now too
+      setCard(key, { main: t.dataset.ceMain }, true);
+    } else if (t.dataset.ceFav) { const hidden = new Set(prefs.favHidden || []), id = t.dataset.ceFav; if (hidden.has(id)) hidden.delete(id); else hidden.add(id); saveFavs({ favHidden: [...hidden] }); layoutBoard(); }
+    else if (t.hasAttribute('data-ce-suggest')) { saveFavs({ suggest: !suggestOn() }); layoutBoard(); }
+    else if (t.hasAttribute('data-ce-reset')) {
+      const before = prefs;
+      setCard(key, { bg: null, opacity: null, stroke: null, line: null, hidden: null, main: null }, true);
+      toast(boardName(key) + ' reset', undoTo(before));
+    }
+    // the control pressed was drawn again: focus goes back to it
+    if (mark && !t.isConnected) tray.querySelector('[data-tray="cardedit"] [' + mark.name + (mark.value ? '="' + CSS.escape(mark.value) + '"' : '') + ']')?.focus({ preventScroll: true });
+  }
+  tray.addEventListener('input', (ev) => {
+    const k = ev.target.dataset?.ceColour;
+    if (k && cardEdit) setCard(cardEdit, { [k]: ev.target.value });
+  });
+  // the opacity bar: dragged anywhere along it, or the arrow keys (Shift for tens), Home and End
+  const setCardBar = (bar, v) => setCard(cardEdit, { [bar.dataset.ceBar]: Math.max(0, Math.min(100, Math.round(v))) });
+  tray.addEventListener('pointerdown', (ev) => {
+    const bar = ev.target.closest('[data-ce-bar]');
+    if (!bar || !cardEdit || ev.button > 0) return;
+    ev.preventDefault();
+    bar.focus({ preventScroll: true });
+    bar.setPointerCapture(ev.pointerId);
+    const at = (e) => { const r = bar.getBoundingClientRect(); setCardBar(bar, ((e.clientX - r.left) / r.width) * 100); };
+    at(ev);
+    const end = () => { bar.removeEventListener('pointermove', at); bar.removeEventListener('pointerup', end); bar.removeEventListener('pointercancel', end); };
+    bar.addEventListener('pointermove', at);
+    bar.addEventListener('pointerup', end);
+    bar.addEventListener('pointercancel', end);
+  });
+  tray.addEventListener('keydown', (ev) => {
+    if (!cardEdit) return;
+    if (ev.key === 'Escape' && !ev.target.matches?.('input')) { ev.preventDefault(); ev.stopPropagation(); closeCardEditor(); return; }
+    const bar = ev.target.closest?.('[data-ce-bar]');
+    if (!bar) return;
+    const now = Number(bar.getAttribute('aria-valuenow')), step = ev.shiftKey ? 10 : 1;
+    const next = { ArrowRight: now + step, ArrowUp: now + step, ArrowLeft: now - step, ArrowDown: now - step, Home: 0, End: 100 }[ev.key];
+    if (next == null) return;
+    ev.preventDefault();
+    setCardBar(bar, next);
+  });
   tray.addEventListener('click', (ev) => {
     const t = ev.target.closest('button');
     if (!t) return;
     if (t.hasAttribute('data-tray-tab')) { trayTab = t.dataset.trayTab; showTrayTab(true); tray.querySelector('.tfTrayInner').scrollTop = 0; return; }
     if (t.hasAttribute('data-tray-go')) { trayTab = t.dataset.trayGo; showTrayTab(false); trayPage(tray, 'Edit custom dashboard', trayTab, TRAY_TABS.find(([k]) => k === trayTab)[1]); return; }
-    if (t.hasAttribute('data-tray-back')) { trayPage(tray, 'Edit custom dashboard', null); return; }
+    if (t.hasAttribute('data-tray-back')) { if (cardEdit) closeCardEditor(); else trayPage(tray, 'Edit custom dashboard', null); return; }
+    if (cardEdit && t.closest('[data-tray="cardedit"]')) { cardEditClick(t); return; }
     if (t.hasAttribute('data-tray-done')) setEditing(false);
     else if (t.hasAttribute('data-info')) openInfo(t);
     else if (t.hasAttribute('data-dash-sums')) { saveDash({ ...boardPrefs(), hidden: boardPrefs().hidden.filter((k) => k !== 'sums'), sumsOff: !prefs.dash?.sumsOff }); refresh(); renderTray(); }
@@ -3340,7 +3580,7 @@ export function mountTestFocus(root, { config, getHass }) {
   });
   // dragging: the card follows the pointer and lands on the nearest cell; cards in the way move down to make room
   function boardDown(ev) {
-    if (!editing || ev.button !== 0 || ev.target.closest('[data-board-more],.tfBoardMenu,.tfFavHides')) return;
+    if (!editing || cardEdit || ev.button !== 0 || ev.target.closest('[data-board-more],.tfBoardMenu,.tfFavHides')) return;
     const el = ev.target.closest('.tfBoardItem');
     const it = el && boardItems().find((x) => x.el === el);
     if (!it || HEAD.includes(it.key)) return;
@@ -4656,6 +4896,7 @@ export function mountTestFocus(root, { config, getHass }) {
       if (t.classList?.contains('tfAreaPanel') && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); pickArea(t); }
       if (t.dataset?.summary && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); openSummary(t.dataset.summary, t); }
       if (ev.key === 'Escape' && boardOpen && el === grid) { ev.preventDefault(); closeBoardMenu(true); return; }
+      if (ev.key === 'Escape' && cardEdit && el === grid) { ev.preventDefault(); closeCardEditor(); return; }
       if (ev.key === 'Escape' && editing && el === grid) { ev.preventDefault(); setEditing(false); $('dashEditNav')?.focus(); return; }
       if (ev.key === 'Escape' && areaPage && el === grid) { ev.preventDefault(); closeArea(); }
       // a cover's blocks: arrows 1 (10 with Shift), Page Up and Down 25, Home closed, End open; sent after a pause

@@ -1294,3 +1294,41 @@ button.tfAreaIcon{cursor:pointer}
 #app.tfAreaOpen #homeView .grid .tfAction{align-self:start}
 /* a HomeCore icon (19 Nov) sits where Home Assistant's would, at its size until it's fitted */
 [data-icon-for]>svg.hcGlyph{display:block;flex:none;width:var(--mdc-icon-size,24px);height:var(--mdc-icon-size,24px);overflow:visible}
+/* a card's own page in the edit tray (Edit card, Matt, 20 Nov): the tray's tabs and sections give way to the card's,
+   ‹ back to them, as a phone's tray pages do */
+.tfEditTray:not(.hcTrayCard) .hcCardEdit{display:none}
+#app .tfEditTray.hcTrayCard :is(.hcTrayTabs,.hcTrayList,.tfTraySection){display:none!important}
+#app .tfEditTray.hcTrayCard .hcTrayBack{display:inline-flex;flex:none;width:40px;height:40px;margin-block:-4px}
+#app .tfEditTray.hcTrayCard .tfTrayHead{justify-content:flex-start;gap:12.8px}
+#app .tfEditTray.hcTrayCard .tfTrayHead>.activityTitle{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#app .tfEditTray.hcTrayCard .tfTrayHead>[data-tray-done]{margin-left:auto}
+.hcCardEdit{display:flex;flex-direction:column;gap:20px}
+.hcCeGroup{display:flex;flex-direction:column;gap:4px}
+.hcCeGroup+.hcCeGroup{padding-top:20px;border-top:1px solid var(--line)}
+.hcCeGroup>.sectionLabel{margin:0 0 4px}
+.hcCeSub{margin:8px 0 4px}
+.hcCeLine{gap:12px}
+.hcCeEnd{display:flex;align-items:center;gap:12px;margin-left:auto}
+/* a row that shows or hides something, or picks the main one: its icon, its name and what it reads, then its switch or tick */
+.hcCeRow{display:grid;grid-template-columns:var(--chip-size) minmax(0,1fr) auto;align-items:center;gap:10px;min-height:var(--tile-min);padding:0 4px;border-radius:var(--r-tile)}
+.hcCeRow.hcCeBare{grid-template-columns:minmax(0,1fr) auto;padding-left:0}
+.hcCeRow .tfIcon{background:var(--hc-icon);color:var(--hc-icon-ink)}
+.hcCeRow .tfIcon svg{width:20px;height:20px;fill:currentColor}
+#app button.hcCeRow{width:100%;min-height:var(--tile-min);border:0;background:none;color:var(--text);font:inherit;text-align:start;cursor:pointer}
+#app button.hcCeRow:hover{background:var(--tile)}
+#app button.hcCeRow[aria-checked="true"]{background:var(--tile);box-shadow:inset 0 0 0 .2px var(--line),inset 0 -.4px 0 var(--line)}
+.hcCeTick{display:grid;place-items:center;width:36px;color:var(--text);visibility:hidden}
+.hcCeTick svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2}
+.hcCePick[aria-checked="true"] .hcCeTick{visibility:visible}
+.hcCeRow>.switch:disabled{opacity:.4;cursor:default}
+/* the board while a card's page is open: the card as it'll be, the others faded and still, edit mode's outlines and
+   chips gone; the board slides left from under the tray */
+#app.hcCardEditing #homeView .tfBoardItem:not(.hcCardEdited){opacity:.25;pointer-events:none}
+#app.hcCardEditing #homeView .tfBoardItem{outline:none!important;cursor:default!important}
+#app.hcCardEditing #homeView .tfDashBento .wbCard{outline:none}
+#app.hcCardEditing #homeView :is(.tfEditChips,.tfFavHides,.tfBoardCells){display:none}
+#app.hcCardEditing #homeView .hcCardEdited{z-index:2}
+#app.tfEditing #homeView>.grid{transition:translate .35s cubic-bezier(.2,.7,.3,1)}
+/* slid left, the board goes under the rail's edge rather than over the rail */
+#app.hcCardEditing #homeView{overflow-x:clip}
+@media (prefers-reduced-motion:reduce){#app.tfEditing #homeView>.grid{transition:none}}
