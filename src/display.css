@@ -677,18 +677,18 @@ button.tfAreaIcon{cursor:pointer}
 .tfRoomTile:not([data-rows="1"]) :is(.tfRoomDevices,.tfRoomHeads){margin-top:auto}
 .tfRoomSub{overflow:hidden;color:var(--muted);font:400 16px/19px var(--font);white-space:nowrap;text-overflow:ellipsis}
 .tfRoomDevices{display:flex;gap:12px}
-.tfRoomDevices .tfIcon{border:0;padding:0;background:var(--hc-icon);color:var(--hc-icon-ink);cursor:pointer}
+.tfRoomDevices .tfIcon{border:0;padding:0;background:var(--hc-icon-soft);color:var(--text);cursor:pointer} /* faint: an icon on its own opens (Matt, 20 and 21 Nov) */
 .tfRoomDevices .tfIcon.on[data-light]{background:var(--light-soft);color:var(--light-ink)}
-#app.tfBoard .tfRoomTile[data-rows="1"] .tfRoomInline{display:inline}
-#app.tfBoard .tfRoomTile[data-rows="1"] :is(.tfRoomReading,.tfRoomDevices),#app.tfBoard .tfRoomTile[data-rows="2"] .tfRoomDevices{display:none}
-#app.tfBoard .tfRoomTile:is([data-rows="4"],[data-rows="5"]) .tfActionHead .activityRowMeta{display:none}
-#app.tfBoard .tfRoomTile:is([data-rows="4"],[data-rows="5"]) .tfRoomSub{display:block}
-#app.tfBoard .tfRoomTile[data-rows="4"] .tfRoomBig{font-size:41.6px;line-height:41.6px;letter-spacing:-1.54px}
-#app.tfBoard .tfRoomTile[data-rows="5"] .tfRoomBig{font-size:51.2px;line-height:51.2px;letter-spacing:-1.54px}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-rows="1"] .tfRoomInline{display:inline}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-rows="1"] :is(.tfRoomReading,.tfRoomDevices),:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-rows="2"] .tfRoomDevices{display:none}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile:is([data-rows="4"],[data-rows="5"]) .tfActionHead .activityRowMeta{display:none}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile:is([data-rows="4"],[data-rows="5"]) .tfRoomSub{display:block}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-rows="4"] .tfRoomBig{font-size:41.6px;line-height:41.6px;letter-spacing:-1.54px}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-rows="5"] .tfRoomBig{font-size:51.2px;line-height:51.2px;letter-spacing:-1.54px}
 /* narrow (one column): all four devices in one row along the foot, 12 apart, as the Figma draws them (Width=1, Size=M,
    L, XL: 954:6202, 954:6233, 954:6265; Matt, 18 Nov: "one row, as Figma"), the reading big above them; at M its second
    reading stays in the head. A card too narrow for four in a row (a phone's) takes them onto a second */
-#app.tfBoard .tfRoomTile[data-cols="1"]:is([data-rows="3"],[data-rows="4"],[data-rows="5"]) .tfRoomDevices{display:flex;flex-wrap:wrap}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-cols="1"]:is([data-rows="3"],[data-rows="4"],[data-rows="5"]) .tfRoomDevices{display:flex;flex-wrap:wrap}
 /* a room's tile wide (2 columns) or really wide (3+; Matt, 6 Nov; Figma 954:6297): its devices as heads (icon, name,
    state) in place of buttons, wide two by two, really wide in one row. XS the buttons on the right of the head; wide S
    (its first two) and M, and really wide S, have the reading in the head */
@@ -699,32 +699,33 @@ button.tfAreaIcon{cursor:pointer}
 .tfRoomDev{position:relative;isolation:isolate;display:flex;align-items:center;gap:12px;min-width:0;height:60px;padding:10px;box-sizing:border-box;border-radius:20px;cursor:pointer} /* the whole tile opens its control (Matt, 20 Nov) */
 .tfRoomDev::before{content:"";position:absolute;z-index:-1;inset:0;border-radius:inherit;pointer-events:none;transition:background .15s ease,box-shadow .15s ease}
 /* a wide Small card: its head, 10, then its one row of tiles */
-#app.tfBoard .tfRoomTile:not([data-cols="1"])[data-rows="2"]{gap:10px}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile:not([data-cols="1"])[data-rows="2"]{gap:10px}
 @media (hover:hover){.tfRoomDev:hover::before{background:var(--tile);box-shadow:inset 0 0 0 .2px var(--line),inset 0 -.4px 0 var(--line)}}
 .tfRoomDevName{padding:0;border:0;background:none;color:inherit;font:inherit;text-align:start;cursor:pointer}
-.tfRoomDev .tfIcon{border:0;padding:0;background:var(--hc-icon-soft);color:var(--text);cursor:pointer} /* faint fill: this icon opens the device, it does not toggle it (Matt, 21 Nov: a full fill is a switch, a faint fill opens something) */
+.tfRoomDev .tfIcon{border:0;padding:0;background:var(--hc-icon);color:var(--hc-icon-ink);cursor:pointer} /* full: a tile's icon is its switch (Matt, 20 Nov; 21 Nov: a full fill is a switch, a faint fill opens something) */
+.tfRoomDev span.tfIcon{background:var(--hc-icon-soft);color:var(--text)} /* one that can't be switched opens with its tile: faint */
 .tfRoomDev .tfIcon.on[data-light]{background:var(--light-soft);color:var(--light-ink)}
 /* the room's icon opens the room's page and is drawn as the summaries' are, no chip (Matt, 18 Nov); a device's icon keeps
    its chip */
 #app .tfRoomTile .tfIcon.tfIconOpen{border:0;padding:0;background-color:transparent!important;color:var(--hc-icon-ink);cursor:pointer}
 /* a small card: the callout big with what it is under it, small (Matt, 18 Nov: "a small subtitle under"), and not in the
    head as well */
-#app.tfBoard .tfRoomTile[data-cols="1"][data-rows="2"]{gap:8px}
-#app.tfBoard .tfRoomTile[data-cols="1"][data-rows="2"] .tfActionHead .activityRowMeta{display:none}
-#app.tfBoard .tfRoomTile[data-cols="1"][data-rows="2"] .tfRoomReading{gap:2px}
-#app.tfBoard .tfRoomTile[data-cols="1"][data-rows="2"] .tfRoomBig{font-size:32px;line-height:32px;letter-spacing:-.64px}
-#app.tfBoard .tfRoomTile[data-cols="1"][data-rows="2"] .tfRoomSub{display:block;font-size:14px;line-height:18px}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-cols="1"][data-rows="2"]{gap:8px}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-cols="1"][data-rows="2"] .tfActionHead .activityRowMeta{display:none}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-cols="1"][data-rows="2"] .tfRoomReading{gap:2px}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-cols="1"][data-rows="2"] .tfRoomBig{font-size:32px;line-height:32px;letter-spacing:-.64px}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-cols="1"][data-rows="2"] .tfRoomSub{display:block;font-size:14px;line-height:18px}
 .tfRoomDevName{display:flex;flex-direction:column;min-width:0}
 .tfRoomDevName>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-#app.tfBoard .tfRoomTile[data-rows="1"]:not([data-cols="1"]){flex-direction:row;align-items:center;gap:12px}
-#app.tfBoard .tfRoomTile[data-rows="1"]:not([data-cols="1"])>.tfActionHead{flex:1;margin-bottom:0}
-#app.tfBoard .tfRoomTile[data-rows="1"]:not([data-cols="1"]) .tfRoomDevices{display:flex}
-#app.tfBoard .tfRoomTile:not([data-cols="1"]):not([data-rows="1"]) .tfRoomDevices{display:none}
-#app.tfBoard .tfRoomTile:not([data-cols="1"]):not([data-rows="1"]) .tfRoomHeads{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
-#app.tfBoard .tfRoomTile:not([data-cols="1"]):not([data-cols="2"]):not([data-rows="1"]) .tfRoomHeads{grid-template-columns:repeat(4,minmax(0,1fr))}
-#app.tfBoard .tfRoomTile[data-cols="2"][data-rows="2"] .tfRoomDev:nth-child(n+3){display:none}
-#app.tfBoard .tfRoomTile:not([data-cols="1"]):is([data-rows="2"],[data-cols="2"][data-rows="3"]):has(.tfRoomDevices) .tfRoomInline{display:inline}
-#app.tfBoard .tfRoomTile:not([data-cols="1"]):is([data-rows="2"],[data-cols="2"][data-rows="3"]):has(.tfRoomDevices) .tfRoomReading{display:none}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-rows="1"]:not([data-cols="1"]){flex-direction:row;align-items:center;gap:12px}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-rows="1"]:not([data-cols="1"])>.tfActionHead{flex:1;margin-bottom:0}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-rows="1"]:not([data-cols="1"]) .tfRoomDevices{display:flex}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile:not([data-cols="1"]):not([data-rows="1"]) .tfRoomDevices{display:none}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile:not([data-cols="1"]):not([data-rows="1"]) .tfRoomHeads{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile:not([data-cols="1"]):not([data-cols="2"]):not([data-rows="1"]) .tfRoomHeads{grid-template-columns:repeat(4,minmax(0,1fr))}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile[data-cols="2"][data-rows="2"] .tfRoomDev:nth-child(n+3){display:none}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile:not([data-cols="1"]):is([data-rows="2"],[data-cols="2"][data-rows="3"]):has(.tfRoomDevices) .tfRoomInline{display:inline}
+:is(#app.tfBoard,#app .hcAceCard) .tfRoomTile:not([data-cols="1"]):is([data-rows="2"],[data-cols="2"][data-rows="3"]):has(.tfRoomDevices) .tfRoomReading{display:none}
 #app.tfBoard .tfDashBento[data-rows="1"] .wbCard{padding:10px;border-radius:24px}
 #app.tfBoard .tfDashBento[data-rows="1"] .wbVisual{display:none}
 /* the weather: XS now as a tile; S now; M now and a sentence; L now and the days; XL all three */
@@ -1346,3 +1347,29 @@ button.tfAreaIcon{cursor:pointer}
 #app.tfBoard #homeView>.grid .tfFavHide{transform-origin:50% 50%;scale:calc(1 / var(--board-k,1))}
 #app.tfBoard #homeView>.grid .tfBoardMenu{transform-origin:100% 0;scale:calc(1 / var(--board-k,1))}
 @media (prefers-reduced-motion:reduce){#app.tfBoard #homeView>.grid{transition:none}}
+/* Edit area card (Matt, 23 Nov), on the area's page: the card as Home has it, the hint over it, and everything in the area
+   under it, by device, as cards of rows two across. A space the card can take is dashed; what's picked or dragged over is
+   outlined in the accent; what's on the card says where */
+.hcAce{grid-column:1/-1;display:flex;flex-direction:column;gap:16px;min-width:0}
+.hcAceHint{margin:0;color:var(--muted);font:400 14px/1.4 var(--font)}
+.hcAceCard{width:min(var(--ace-w),100%);height:var(--ace-h)}
+.hcAceCard>.tfRoomTile{height:100%;box-sizing:border-box;cursor:default}
+.hcAceCard [data-slot]{cursor:grab;touch-action:pan-y}
+.hcAceDragging,.hcAceDragging *{cursor:grabbing!important;user-select:none}
+.hcSlotEmpty{border:0;padding:0;background:none;box-shadow:inset 0 0 0 1.5px var(--line);outline:1.5px dashed color-mix(in srgb,var(--text) 35%,transparent);outline-offset:-6px;color:inherit}
+.hcAceCard .tfRoomHeads>.hcSlotEmpty{margin:0}
+.hcSlotMain{display:block;width:100%;min-height:72px;margin:6px 0;border-radius:20px}
+.hcAceCard .tfRoomHeads{gap:0}
+.hcAceCard :is(.hcPicked,.hcOver),.hcAcePicking .hcAceCard [data-slot]:hover{outline:2px solid var(--primary);outline-offset:-2px;border-radius:20px}
+.hcAceList{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start;border-radius:var(--r-card)}
+.hcAceList.hcOver{outline:2px dashed var(--primary);outline-offset:4px}
+.hcAceGroup .activityRows{display:grid;grid-template-columns:minmax(0,1fr)}
+#app .hcAceRow{display:flex;flex-wrap:nowrap;align-items:center;gap:12px;width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:grab;border-radius:16px;touch-action:pan-y}
+.hcAceRow[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--primary)}
+.hcAceRow .tfIcon{background:var(--hc-icon);color:var(--hc-icon-ink)}
+.hcAceText{display:flex;flex-direction:column;min-width:0;flex:1}
+.hcAceAt{flex:none;margin-left:auto;padding:2px 10px;border-radius:999px;background:var(--tile);color:var(--muted);font:600 12px/18px var(--font-tile)}
+.hcAceGhost{position:fixed;left:0;top:0;z-index:600;display:flex;align-items:center;gap:10px;padding:8px 14px 8px 8px;border-radius:20px;background:var(--card);color:var(--text);box-shadow:var(--hc-hair-all),0 8px 24px rgba(0,0,0,.25);pointer-events:none;font:600 14px/20px var(--font-tile)}
+.hcAceGhost .tfIcon{background:var(--hc-icon);color:var(--hc-icon-ink)}
+.hcAceToggle{margin-left:auto}
+@media(max-width:620px){.hcAce{padding:0 16px}.hcAceList{grid-template-columns:minmax(0,1fr)}}

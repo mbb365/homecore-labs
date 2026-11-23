@@ -1264,13 +1264,48 @@ export function mountTestFocus(root, { config, getHass }) {
      own, a room's lights or covers as a group), a device's icon beside its name turns it on and off, the reading opens its more-info, and the edge lights up */
   const isRoomKey = (key) => key.startsWith('room:');
   const roomOf = (key) => areaRooms.find((r) => 'room:' + r.id === key);
-  function roomTile(r, key, attrs = '') {
+  /* Edit area card (Matt, 23 Nov: "a 'what you see is what you get' type design… Just for the area cards… all the entities
+     and devices available in that area, and then you'll drag them into the spaces available on the card. So there's 4
+     spaces available at the bottom of the card, and then there's one large main data point"): an area's card is its main
+     and four spaces, each one of its card's own keys (the lights, the covers…, kept as "key:lights") or one entity. Until
+     something's moved, what the card has always shown: its main and its first four controls */
+  const areaCard = (r) => {
+    const saved = prefs.areaCards?.[r.id];
+    if (saved) return { main: saved.main ?? null, slots: [0, 1, 2, 3].map((i) => saved.slots?.[i] ?? null) };
+    const ctl = roomKeys(r).filter((k) => k.kind === 'control').slice(0, 4).map((k) => 'key:' + k.key);
+    return { main: mainOf(r), slots: [0, 1, 2, 3].map((i) => ctl[i] || null) };
+  };
+  // what a space holds, as a key the card draws: one of the area's keys, or an entity as one (its icon, its name without
+  // the room's, its state; a switch where it can be turned on and off, else it only opens)
+  const SWITCHED = ['light', 'switch', 'fan', 'input_boolean', 'humidifier', 'climate'];
+  function slotKey(r, item, keys) {
+    if (item.startsWith('key:')) {
+      const k = keys.find((x) => x.key === item.slice(4)), ids = k ? groupIds(r, k.key) : [];
+      return k ? { ...k, group: true, more: ids.length === 1 ? ids[0] : 'group:' + r.id + ':' + k.key } : null;
+    }
+    const st = states[item];
+    if (!st) return null;
+    const d = item.split('.')[0], rgb = kindRgb(item), s0 = st.state;
+    const acts = SWITCHED.includes(d) ? [[d, 'toggle', item]] : d === 'cover' ? [['cover', s0 === 'closed' ? 'open_cover' : 'close_cover', item]] : d === 'lock' ? [['lock', s0 === 'locked' ? 'unlock' : 'lock', item]] : null;
+    const on = Boolean(rgb) || s0 === 'on';
+    return { key: 'ent:' + item, more: item, kind: 'control', tone: d === 'light' ? 'light' : 'blue', light: rgb ? colourVars(rgb) : '', icon: areaGlyph(item), label: inRoom(r, item), value: valueOf(item), on,
+      acts, aria: (on ? 'Turn off ' : 'Turn on ') + nameOf(item) };
+  }
+  function roomTile(r, key, attrs = '', edit = false) {
     // a tile on the board keeps its own devices and main reading (Edit tile); the Areas card's open area doesn't
     const own = key ? cardOf(key) : {}, off = new Set(own.hidden || []);
-    const keys = roomKeys(r), main = (states[own.main] && own.main) || mainOf(r), h = main && headline(main), sub = main ? mainSub(r, main, keys) : '';
-    const big = h ? h.text + (h.unit ? ' ' + h.unit : '') : '';
-    const opens = (k) => { const ids = groupIds(r, k.key); return ids.length === 1 ? ids[0] : 'group:' + r.id + ':' + k.key; };
-    const controls = inCardOrder(key || '', keys.filter((k) => k.kind === 'control' && !off.has(k.key)), (k) => k.key).slice(0, 4), lit = (k) => (k.on && k.light ? ' data-light style="' + k.light + '"' : '');
+    const keys = roomKeys(r), lit = (k) => (k.on && k.light ? ' data-light style="' + k.light + '"' : '');
+    // what the area's card was given in Edit area card (Matt, 23 Nov): its main and its four spaces, wherever it shows
+    const picked = prefs.areaCards?.[r.id] || edit ? areaCard(r) : null;
+    const mainItem = picked ? picked.main : (states[own.main] && own.main) || mainOf(r);
+    const mainKey = mainItem && slotKey(r, mainItem, keys);
+    const main = mainKey ? mainKey.more : null;
+    const h = mainKey && !mainKey.group ? headline(main) : null;
+    const big = mainKey ? (mainKey.group ? mainKey.value : h ? h.text + (h.unit ? ' ' + h.unit : '') : '') : '';
+    const sub = mainKey ? (mainKey.group ? mainKey.label : mainSub(r, main, keys)) : '';
+    const opens = (k) => k.more || (() => { const ids = groupIds(r, k.key); return ids.length === 1 ? ids[0] : 'group:' + r.id + ':' + k.key; })();
+    const spaces = picked ? picked.slots.map((it) => (it ? slotKey(r, it, keys) : null)) : null;
+    const controls = spaces ? spaces.filter(Boolean) : inCardOrder(key || '', keys.filter((k) => k.kind === 'control' && !off.has(k.key)), (k) => k.key).slice(0, 4);
     /* the rule (Matt, 20 Nov: "If it is just an icon, it opens the panel or more info that controls that. if it is a tile
        with name and subtitle etc then it opens the more info and the icon in the tile becomes the binary toggle like it is
        (if defined by the device/entity)"): an icon on its own opens what it stands for (the room's lights panel, the
@@ -1278,11 +1313,14 @@ export function mountTestFocus(root, { config, getHass }) {
        be, else opens it too. The room's own head is as it was: its icon and name open the room's page */
     const opener = (k) => '<button class="tfIcon' + (k.on ? ' on' : '') + '" type="button" data-ce-item="' + esc(k.key) + '" data-tone="' + k.tone + '"' + lit(k) + ' data-more="' + esc(opens(k)) + '" aria-label="' + esc(r.name + ' ' + k.label.toLowerCase() + ', ' + k.value + '. Open') + '">' + k.icon + '</button>';
     const toggle = (k) => '<button class="tfIcon' + (k.on ? ' on' : '') + '" type="button" data-tone="' + k.tone + '"' + lit(k) + ' data-acts="' + acts(k.acts) + '" aria-label="' + esc(k.aria) + '" aria-pressed="' + k.on + '">' + k.icon + '</button>';
-    const devices = controls.map(opener);
+    const head = (k, i) => '<div class="tfRoomDev' + (k.on ? ' on' : '') + '" data-ce-item="' + esc(k.key) + '" data-more="' + esc(opens(k)) + '"' + (edit ? ' data-slot="' + i + '"' : '') + '>' + (k.acts?.length ? toggle(k) : '<span class="tfIcon' + (k.on ? ' on' : '') + '" data-tone="' + k.tone + '"' + lit(k) + ' aria-hidden="true">' + k.icon + '</span>') +
+      '<button class="tfName tfRoomDevName" type="button" data-more="' + esc(opens(k)) + '" aria-label="' + esc(r.name + ' ' + k.label.toLowerCase() + ', ' + k.value + '. Open') + '"><span class="activityRowName">' + esc(k.label) + '</span><span class="activityRowMeta">' + esc(k.value) + '</span></button></div>';
+    // Edit area card: all four spaces, an empty one a dashed outline to drop into
+    const empty = (i) => '<button class="tfRoomDev hcSlotEmpty" type="button" data-slot="' + i + '" aria-label="Empty space ' + (i + 1) + '"></button>';
+    const devices = edit ? [] : controls.map(opener); // (the editor shows the card wide: its spaces are the heads)
     // wide, the same devices as heads (icon, name, state), as the open room shows them (Matt, 6 Nov; Figma 954:6297): the
     // tile opens its control, its icon the switch
-    const heads = controls.map((k) => '<div class="tfRoomDev' + (k.on ? ' on' : '') + '" data-ce-item="' + esc(k.key) + '" data-more="' + esc(opens(k)) + '">' + (k.acts?.length ? toggle(k) : '<span class="tfIcon' + (k.on ? ' on' : '') + '" data-tone="' + k.tone + '"' + lit(k) + ' aria-hidden="true">' + k.icon + '</span>') +
-      '<button class="tfName tfRoomDevName" type="button" data-more="' + esc(opens(k)) + '" aria-label="' + esc(r.name + ' ' + k.label.toLowerCase() + ', ' + k.value + '. Open') + '"><span class="activityRowName">' + esc(k.label) + '</span><span class="activityRowMeta">' + esc(k.value) + '</span></button></div>');
+    const heads = edit ? spaces.map((k, i) => (k ? head(k, i) : empty(i))) : controls.map((k, i) => head(k, i));
     // the room's icon opens the room's page (Matt, 18 Nov), bare as the summaries' are; it used to turn off everything in
     // the room, which "just shouldn't happen"
     const glyph = '<span class="tfAreaGlyph"' + iconSlot('area:' + r.id, r.icon || 'mdi:texture-box', r.name) + '></span>';
@@ -1292,8 +1330,9 @@ export function mountTestFocus(root, { config, getHass }) {
       '<button class="tfName" type="button" data-go="' + esc(r.id) + '" aria-label="Open ' + esc(r.name) + '"><span class="activityRowName">' + esc(r.name) + '</span>' +
       (big || sub ? '<span class="activityRowMeta">' + (big ? '<span class="tfRoomInline">' + esc(big) + (sub ? ' · ' : '') + '</span>' : '') + esc(sub) + '</span>' : '') + '</button></div>' +
       // the reading opens its more-info (the thermometer's, say)
-      (big ? '<button class="tfRoomReading" type="button" data-more="' + esc(main) + '" aria-label="' + esc(nameOf(main) + ', ' + valueOf(main) + '. More info') + '"><span class="tfRoomBig">' + esc(big) + '</span>' + (sub ? '<span class="tfRoomSub">' + esc(sub) + '</span>' : '') + '</button>' : '') +
-      (devices.length ? '<div class="tfRoomDevices">' + devices.join('') + '</div><div class="tfRoomHeads">' + heads.join('') + '</div>' : '') + '</div>';
+      (big ? '<button class="tfRoomReading" type="button" data-more="' + esc(main) + '"' + (edit ? ' data-slot="main"' : '') + ' aria-label="' + esc((mainKey.group ? mainKey.label : nameOf(main)) + ', ' + (mainKey.group ? mainKey.value : valueOf(main)) + '. More info') + '"><span class="tfRoomBig">' + esc(big) + '</span>' + (sub ? '<span class="tfRoomSub">' + esc(sub) + '</span>' : '') + '</button>'
+        : edit ? '<button class="tfRoomReading hcSlotEmpty hcSlotMain" type="button" data-slot="main" aria-label="Empty main space"></button>' : '') +
+      (devices.length || edit ? '<div class="tfRoomDevices">' + devices.join('') + '</div><div class="tfRoomHeads">' + heads.join('') + '</div>' : '') + '</div>';
   }
 
   /* sections: Home and each room, with their devices as Home Assistant has them (Security is a summary's popup, Matt
@@ -1504,7 +1543,7 @@ export function mountTestFocus(root, { config, getHass }) {
     ]);
     // edit mode's old choices (sections, order, sizes…) are left behind: the page is laid out as Home Assistant has it
     const v = mine?.value || {};
-    prefs = { favourites: v.favourites ?? null, sources: v.sources, hiddenSums: v.hiddenSums, shownSums: v.shownSums, home: v.home, dash: v.dash, named: v.named, favHidden: v.favHidden, suggest: v.suggest, favSeeded: v.favSeeded, areaOrder: v.areaOrder, areaMains: v.areaMains };
+    prefs = { favourites: v.favourites ?? null, sources: v.sources, hiddenSums: v.hiddenSums, shownSums: v.shownSums, home: v.home, dash: v.dash, named: v.named, favHidden: v.favHidden, suggest: v.suggest, favSeeded: v.favSeeded, areaOrder: v.areaOrder, areaMains: v.areaMains, areaCards: v.areaCards };
     haHome = home?.value || {};
     haSecurity = security?.value || {};
     predicted = Array.isArray(usage?.entities) ? usage.entities : [];
@@ -3786,6 +3825,8 @@ export function mountTestFocus(root, { config, getHass }) {
     out.push({ key: 'areahead', html: areaHead(page, ++order) });
     // an area's page isn't designed yet: it says so under its header (Matt, 16 Nov: "this is not designed", "below the
     // header")
+    if (page.room && aceArea === page.room.id) { out.push({ key: 'areaedit', html: aceHtml(page.room, ++order) }); return out; }
+    if (aceArea) { aceArea = null; acePick = null; }
     if (page.room) out.push({ key: 'areanote', html: '<p class="hcNotDesigned" data-tf data-k="areanote" style="order:' + (++order) + '">This is not designed</p>' });
     if (page.key === 'weather') { out.weather = ++order; return out; }
     if (page.demo) return demoPage(out, page.key, order);
@@ -3811,8 +3852,156 @@ export function mountTestFocus(root, { config, getHass }) {
     return out;
   }
   // a section's page header, as Move Assistant's pages have: a big back arrow and the section's name
+  /* Edit area card (Matt, 23 Nov), on the area's page: its card as Home has it (two columns wide, Large), its main and four
+     spaces to drop into (an empty one dashed), and under it everything in the area, by device, each with its icon, name
+     and state. Drag one onto a space, or tap it and then the space (the keyboard too): the card is drawn again straight
+     away with real values. Onto a full space they swap; a space dragged (or tapped, then the list) back to the list is
+     emptied. Each thing is in one place at a time. Kept with the rest of the page's settings */
+  let aceArea = null, acePick = null, aceDrag = null, aceNoClick = 0;
+  const aceRoom = () => areaRooms.find((r) => r.id === aceArea);
+  const slotGet = (c, sl) => (sl === 'main' ? c.main : c.slots[sl]);
+  const slotPut = (c, sl, v) => { if (sl === 'main') c.main = v; else c.slots[sl] = v; };
+  const slotOf = (c, item) => (c.main === item ? 'main' : c.slots.indexOf(item) >= 0 ? c.slots.indexOf(item) : null);
+  const slotParse = (v) => (v === 'main' ? 'main' : Number(v));
+  const slotName = (sl) => (sl === 'main' ? 'Main' : 'Space ' + (sl + 1));
+  // everything in the area: its card's own keys first (the lights together, the covers…), then its entities by device
+  function aceGroups(r) {
+    const keys = roomKeys(r), h = getHass();
+    const ids = [...new Set([...r.actions, ...r.plugs, ...(r.locks || []), ...r.readings, ...r.openings, ...r.solar, ...(r.alerts || []), ...(r.statuses || []), ...r.plants.flatMap((pl) => [pl.id, ...pl.readings])])].filter((id) => states[id]);
+    const byDev = new Map();
+    ids.forEach((id) => {
+      const dev = h?.devices?.[h?.entities?.[id]?.device_id], name = (dev && (dev.name_by_user || dev.name)) || nameOf(id);
+      if (!byDev.has(name)) byDev.set(name, []);
+      byDev.get(name).push(id);
+    });
+    const own = keys.filter((k) => k.kind === 'control').map((k) => 'key:' + k.key);
+    return [...(own.length ? [{ name: r.name + ' as a whole', items: own }] : []), ...[...byDev].map(([name, items]) => ({ name, items }))];
+  }
+  function aceRow(r, item, c, keys) {
+    const k = slotKey(r, item, keys), at = slotOf(c, item);
+    if (!k) return '';
+    const icon = item.startsWith('key:') ? '<span class="tfIcon" aria-hidden="true">' + k.icon + '</span>' : '<span class="tfIcon" aria-hidden="true"' + iconSlot(item) + '></span>';
+    const name = item.startsWith('key:') ? k.label : nameOf(item);
+    return '<button class="activityRow hcAceRow' + (at != null ? ' hcAceUsed' : '') + '" type="button" data-ace-item="' + esc(item) + '" aria-pressed="' + (acePick?.item === item && acePick.slot == null) + '" aria-label="' + esc(name + ', ' + k.value + (at != null ? '. On the card: ' + slotName(at) : '') + '. Pick to place it') + '">' +
+      icon + '<span class="hcAceText"><span class="activityRowName">' + esc(name) + '</span><span class="activityRowMeta">' + esc(k.value) + '</span></span>' +
+      (at != null ? '<span class="hcAceAt">' + slotName(at) + '</span>' : '') + '</button>';
+  }
+  function aceHtml(r, order) {
+    const c = areaCard(r), keys = roomKeys(r), size = AREA_SIZES.l;
+    return '<section class="hcAce" data-tf data-k="areaedit" style="order:' + order + '" aria-label="Edit area card">' +
+      '<p class="hcAceHint">Drag something onto the card, or tap it and then a space. Drag one off the card to take it away.</p>' +
+      '<div class="hcAceCard" style="--ace-w:' + (2 * size.w + PEG_GAP) + 'px;--ace-h:' + size.h + 'px">' + roomTile(r, null, ' data-cols="2" data-rows="' + size.rows + '"', true) + '</div>' +
+      '<div class="hcAceList">' + aceGroups(r).map((g) => '<section class="card hcAceGroup"><div class="activityHeader"><div class="activityTitle">' + esc(g.name) + '</div></div><div class="activityRows">' +
+        g.items.map((it) => aceRow(r, it, c, keys)).join('') + '</div></section>').join('') + '</div></section>';
+  }
+  // a move, kept and drawn again; the focus goes back where it was
+  function aceMove(src, target) {
+    const r = aceRoom();
+    if (!r) return;
+    const c = areaCard(r), from = src.slot != null ? src.slot : slotOf(c, src.item);
+    if (target === 'list') { if (from == null) { acePick = null; aceMark(); return; } slotPut(c, from, null); }
+    else { const old = slotGet(c, target); slotPut(c, target, src.item); if (from != null && from !== target) slotPut(c, from, old); }
+    prefs = { ...prefs, areaCards: { ...(prefs.areaCards || {}), [r.id]: c } };
+    savePrefs();
+    acePick = null;
+    const was = root.activeElement, sel = was?.dataset?.slot != null ? '[data-slot="' + was.dataset.slot + '"]' : was?.dataset?.aceItem ? '[data-ace-item="' + CSS.escape(was.dataset.aceItem) + '"]' : null;
+    render();
+    if (sel) grid.querySelector('.hcAce ' + sel)?.focus({ preventScroll: true });
+  }
+  // what's picked shows: its row pressed, its space outlined, and every space ready to take it
+  function aceMark() {
+    const ace = grid.querySelector('.hcAce');
+    if (!ace) return;
+    ace.classList.toggle('hcAcePicking', Boolean(acePick));
+    ace.querySelectorAll('[data-ace-item]').forEach((b) => b.setAttribute('aria-pressed', String(acePick?.slot == null && acePick?.item === b.dataset.aceItem)));
+    ace.querySelectorAll('.hcAceCard [data-slot]').forEach((b) => b.classList.toggle('hcPicked', acePick?.slot != null && String(acePick.slot) === b.dataset.slot));
+  }
+  function aceToggle() {
+    const r = areaRooms.find((x) => 'room:' + x.id === areaPage);
+    aceArea = aceArea ? null : r?.id || null;
+    acePick = null;
+    render();
+    grid.querySelector('.hcAceToggle')?.focus({ preventScroll: true });
+  }
+  function bindAce() {
+    grid.addEventListener('click', (ev) => {
+      if (ev.target.closest?.('[data-ace-toggle]')) { ev.stopPropagation(); ev.preventDefault(); aceToggle(); return; }
+      const ace = ev.target.closest?.('.hcAce');
+      if (!ace) return;
+      // nothing on the card works while it's being edited: a tap places, picks or takes away
+      ev.stopPropagation(); ev.preventDefault();
+      if (performance.now() < aceNoClick) return;
+      const c = areaCard(aceRoom()), slotEl = ev.target.closest('.hcAceCard [data-slot]'), row = ev.target.closest('[data-ace-item]');
+      if (slotEl) {
+        const sl = slotParse(slotEl.dataset.slot), has = slotGet(c, sl);
+        if (acePick) { if (acePick.slot === sl) { acePick = null; aceMark(); } else aceMove(acePick, sl); return; }
+        if (has) { acePick = { item: has, slot: sl }; aceMark(); }
+        return;
+      }
+      if (row) {
+        if (acePick?.slot != null) { aceMove(acePick, 'list'); return; }
+        acePick = acePick?.item === row.dataset.aceItem ? null : { item: row.dataset.aceItem };
+        aceMark();
+        return;
+      }
+      if (ev.target.closest('.hcAceList') && acePick?.slot != null) aceMove(acePick, 'list');
+    }, true);
+    grid.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Escape' || !aceArea) return;
+      ev.stopPropagation(); ev.preventDefault();
+      if (acePick) { acePick = null; aceMark(); } else aceToggle();
+    }, true);
+    // dragging: with a mouse or pen once it's moved 6, with a finger once it's been held a moment (so the page still
+    // scrolls under a swipe); a copy of what's dragged follows the pointer, and what it's over is outlined
+    grid.addEventListener('touchmove', (ev) => { if (aceDrag?.on) ev.preventDefault(); }, { passive: false });
+    grid.addEventListener('pointerdown', (ev) => {
+      const ace = ev.target.closest?.('.hcAce');
+      if (!ace || ev.button || !ev.isPrimary) return;
+      const c = areaCard(aceRoom()), slotEl = ev.target.closest('.hcAceCard [data-slot]'), row = ev.target.closest('[data-ace-item]');
+      const src = slotEl ? { item: slotGet(c, slotParse(slotEl.dataset.slot)), slot: slotParse(slotEl.dataset.slot), el: slotEl } : row ? { item: row.dataset.aceItem, el: row } : null;
+      if (!src?.item) return;
+      const touch = ev.pointerType === 'touch', x0 = ev.clientX, y0 = ev.clientY;
+      let x = x0, y = y0, ghost = null, over = null;
+      const drag = aceDrag = { on: false };
+      const begin = () => {
+        drag.on = true;
+        const k = slotKey(aceRoom(), src.item, roomKeys(aceRoom()));
+        ghost = Object.assign(document.createElement('div'), { className: 'hcAceGhost' });
+        ghost.innerHTML = '<span class="tfIcon">' + (src.el.querySelector('.tfIcon')?.innerHTML || '') + '</span><span class="activityRowName">' + esc(k?.label || '') + '</span>';
+        app.appendChild(ghost);
+        ace.classList.add('hcAceDragging');
+        moveTo();
+      };
+      const targetAt = () => { const el = root.elementFromPoint(x, y); return el?.closest('.hcAceCard [data-slot]') || (el?.closest('.hcAceList') ? ace.querySelector('.hcAceList') : null); };
+      const moveTo = () => {
+        ghost.style.transform = 'translate(' + (x + 12) + 'px,' + (y + 12) + 'px)';
+        const t = targetAt();
+        if (t !== over) { over?.classList.remove('hcOver'); over = t; over?.classList.add('hcOver'); }
+      };
+      const hold = touch ? setTimeout(begin, 280) : 0;
+      const move = (e) => {
+        if (e.pointerId !== ev.pointerId) return;
+        x = e.clientX; y = e.clientY;
+        if (!drag.on) { if (Math.hypot(x - x0, y - y0) >= BAR_SLOP) { if (touch) end(); else begin(); } return; }
+        moveTo();
+      };
+      const end = (e) => {
+        clearTimeout(hold);
+        removeEventListener('pointermove', move, true); removeEventListener('pointerup', end, true); removeEventListener('pointercancel', end, true);
+        if (aceDrag === drag) aceDrag = null;
+        if (!drag.on) return;
+        ghost?.remove(); over?.classList.remove('hcOver'); ace.classList.remove('hcAceDragging');
+        aceNoClick = performance.now() + 400;
+        if (e?.type !== 'pointerup' || !over) return;
+        aceMove(src, over.dataset.slot != null ? slotParse(over.dataset.slot) : 'list');
+      };
+      addEventListener('pointermove', move, true); addEventListener('pointerup', end, true); addEventListener('pointercancel', end, true);
+    });
+  }
   const areaHead = (x, order) => '<div class="settingsHeader tfAreaHead" data-tf data-k="areahead" style="order:' + order + '">' +
-    '<button class="back" type="button" data-area-back aria-label="Back to the house">' + BACK + '</button><div class="settingsTitle">' + esc(x.name) + '</div></div>';
+    '<button class="back" type="button" data-area-back aria-label="Back to the house">' + BACK + '</button><div class="settingsTitle">' + esc(x.name) + '</div>' +
+    // an area's page edits its card (Matt, 23 Nov: "You should edit the area card by going to the area page itself")
+    (x.room ? (aceArea === x.room.id ? '<button class="primary hcAceToggle" type="button" data-ace-toggle>Done</button>' : '<button class="pill hcAceToggle" type="button" data-ace-toggle>Edit area card</button>') : '') + '</div>';
   // a room's Go opens its section's page at its top; back returns to the house exactly where
   // you were (Matt, 28 Oct). Scrolling it into view instead would tuck its title under Home Assistant's top bar
   let leftAt = 0, leftTop = null; // how far the house was scrolled when a page opened, and where its opener was on screen
@@ -3845,6 +4034,7 @@ export function mountTestFocus(root, { config, getHass }) {
     fix();
   }
   function closeArea() {
+    aceArea = null; acePick = null;
     const key = areaPage;
     areaPage = null;
     render();
@@ -5071,6 +5261,7 @@ export function mountTestFocus(root, { config, getHass }) {
     loadPrefs();
     bindControls(grid);
     grid.addEventListener('pointerdown', swipeAreas); // a phone's Areas card
+    bindAce(); // Edit area card
     bindControls(sheet);
     sheet.addEventListener('click', (ev) => { if (ev.target === sheet) closeMore(); });
     // Home, from an area's page, goes back to the house
