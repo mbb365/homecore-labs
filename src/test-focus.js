@@ -3877,6 +3877,7 @@ export function mountTestFocus(root, { config, getHass }) {
     const own = keys.filter((k) => k.kind === 'control').map((k) => 'key:' + k.key);
     return [...(own.length ? [{ name: r.name + ' as a whole', items: own }] : []), ...[...byDev].map(([name, items]) => ({ name, items }))];
   }
+  const ACE_CHECK = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function aceRow(r, item, c, keys) {
     const k = slotKey(r, item, keys), at = slotOf(c, item);
     if (!k) return '';
@@ -3884,13 +3885,15 @@ export function mountTestFocus(root, { config, getHass }) {
     const name = item.startsWith('key:') ? k.label : nameOf(item);
     return '<button class="activityRow hcAceRow' + (at != null ? ' hcAceUsed' : '') + '" type="button" data-ace-item="' + esc(item) + '" aria-pressed="' + (acePick?.item === item && acePick.slot == null) + '" aria-label="' + esc(name + ', ' + k.value + (at != null ? '. On the card: ' + slotName(at) : '') + '. Pick to place it') + '">' +
       icon + '<span class="hcAceText"><span class="activityRowName">' + esc(name) + '</span><span class="activityRowMeta">' + esc(k.value) + '</span></span>' +
-      (at != null ? '<span class="hcAceAt">' + slotName(at) + '</span>' : '') + '</button>';
+      (at != null ? '<span class="hcAceAt">' + ACE_CHECK + 'On the card · ' + slotName(at) + '</span>' : '') + '</button>';
   }
   function aceHtml(r, order) {
     const c = areaCard(r), keys = roomKeys(r), size = AREA_SIZES.l;
     return '<section class="hcAce" data-tf data-k="areaedit" style="order:' + order + '" aria-label="Edit area card">' +
-      '<p class="hcAceHint">Drag something onto the card, or tap it and then a space. Drag one off the card to take it away.</p>' +
+      // a title over the card, the hint under it (Matt, 23 Nov: "Put a title above the preview of the card… that says preview")
+      '<div class="hcAcePreview"><div class="activityTitle hcAceTitle">Preview</div>' +
       '<div class="hcAceCard" style="--ace-w:' + (2 * size.w + PEG_GAP) + 'px;--ace-h:' + size.h + 'px">' + roomTile(r, null, ' data-cols="2" data-rows="' + size.rows + '"', true) + '</div>' +
+      '<p class="hcAceHint">Drag something onto the card, or tap it and then a space. Drag one off the card to take it away.</p></div>' +
       '<div class="hcAceList">' + aceGroups(r).map((g) => '<section class="card hcAceGroup"><div class="activityHeader"><div class="activityTitle">' + esc(g.name) + '</div></div><div class="activityRows">' +
         g.items.map((it) => aceRow(r, it, c, keys)).join('') + '</div></section>').join('') + '</div></section>';
   }

@@ -1363,12 +1363,18 @@ button.tfAreaIcon{cursor:pointer}
 .hcAceCard :is(.hcPicked,.hcOver),.hcAcePicking .hcAceCard [data-slot]:hover{outline:2px solid var(--primary);outline-offset:-2px;border-radius:20px}
 .hcAceList{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start;border-radius:var(--r-card)}
 .hcAceList.hcOver{outline:2px dashed var(--primary);outline-offset:4px}
-.hcAceGroup .activityRows{display:grid;grid-template-columns:minmax(0,1fr)}
+.hcAceGroup .activityRows{display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
 #app .hcAceRow{display:flex;flex-wrap:nowrap;align-items:center;gap:12px;width:100%;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:grab;border-radius:16px;touch-action:pan-y}
 .hcAceRow[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--primary)}
 .hcAceRow .tfIcon{background:var(--hc-icon);color:var(--hc-icon-ink)}
 .hcAceText{display:flex;flex-direction:column;min-width:0;flex:1}
-.hcAceAt{flex:none;margin-left:auto;padding:2px 10px;border-radius:999px;background:var(--tile);color:var(--muted);font:600 12px/18px var(--font-tile)}
+.hcAcePreview{display:flex;flex-direction:column;gap:12px;min-width:0}
+.hcAceTitle{margin:0}
+/* what's on the card (Matt, 23 Nov: "a bigger indication to show that it's already placed into the card rather than just
+   the small chip"): the row tinted in the accent with an accent edge, and a filled accent label with a tick saying where */
+#app .hcAceRow.hcAceUsed{background:color-mix(in srgb,var(--primary) 10%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--primary) 45%,transparent)}
+#app .hcAceRow.hcAceUsed[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--primary)}
+.hcAceAt{flex:none;display:inline-flex;align-items:center;gap:4px;margin-left:auto;padding:4px 10px 4px 8px;border-radius:999px;background:var(--primary);color:var(--text-on-primary,#fff);font:600 12px/16px var(--font-tile);white-space:nowrap}
 .hcAceGhost{position:fixed;left:0;top:0;z-index:600;display:flex;align-items:center;gap:10px;padding:8px 14px 8px 8px;border-radius:20px;background:var(--card);color:var(--text);box-shadow:var(--hc-hair-all),0 8px 24px rgba(0,0,0,.25);pointer-events:none;font:600 14px/20px var(--font-tile)}
 .hcAceGhost .tfIcon{background:var(--hc-icon);color:var(--hc-icon-ink)}
 .hcAceToggle{margin-left:auto}
