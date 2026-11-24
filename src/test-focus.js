@@ -542,6 +542,7 @@ export function mountTestFocus(root, { config, getHass }) {
     ['hourly', ['hourly']], ['sun', ['sun']], ['moon', ['moon']], ['uv', ['uv_index']], ['humidity', ['humidity']], ['pressure', ['pressure']],
     ['wind', ['wind']], ['visibility', ['visibility']]];
   const WIDGETS = DASH_WEATHER.map(([k]) => k);
+  const AREAS_LAB = true; // this copy of the demo is the areas lab: Dashboards holds only the areas (areasLab)
   const NEW_CARDS = ['aq', 'pollen', 'radar', 'hourly', 'sun', 'moon', 'uv', 'humidity', 'pressure', 'wind', 'visibility'];
   // two columns, as on the Weather page (Next hours is wide); the rest one
   const WIDGET_COLS = { hourly: 2 };
@@ -549,7 +550,7 @@ export function mountTestFocus(root, { config, getHass }) {
   // each widget is drawn once it's on the board (or on its way from the tray), and kept from then on
   let dashBentos = null, dashBentoId = null;
   function placeDash(on) {
-    const id = on ? weatherId() : null;
+    const id = on && !(AREAS_LAB && !overview) ? weatherId() : null;
     if (dashBentos && dashBentoId !== id) { dashBentos.forEach((b) => b.destroy()); dashBentos = null; }
     Object.values(dashBoxes).forEach((box) => (id ? !box.isConnected && grid.append(box) : box.remove()));
     if (id && !dashBentos && !suspended) { dashBentos = new Map(); dashBentoId = id; }
@@ -1247,12 +1248,51 @@ export function mountTestFocus(root, { config, getHass }) {
     return '<button class="tfIcon tfAreaPick' + (on ? ' on' : '') + '" type="button" data-area-pick="' + esc(r.id) + '"' + (on ? ' data-light style="' + PICK_ON + '"' : '') +
       ' aria-label="' + esc(r.name) + '" aria-pressed="' + on + '"><span class="tfAreaGlyph"' + iconSlot('area:' + r.id, r.icon || 'mdi:texture-box', r.name) + '></span></button>';
   };
+  /* the areas lab (Matt, 23 Nov): an Areas card made too narrow for every folded area doesn't cut them off: the ones
+     that don't fit are icons, after the folded ones, as a phone's Areas picks are */
+  const accPicks = (shown) => '<div class="hcAccPicks" role="group" aria-label="More areas">' + shown.map((r) => '<button class="hcAccPick" type="button" data-acc-pick="' + esc(r.id) + '" aria-label="' + esc(r.name) + '">' +
+    '<span class="tfIcon"><span class="tfAreaGlyph"' + iconSlot('area:' + r.id, r.icon || 'mdi:texture-box', r.name) + '></span></span></button>').join('') + '</div>';
+  const ACC_PICK = { w: 40, h: 40, gap: 8, pad: 10 }; // a pick: its icon, 40 (no name: Matt, 23 Nov); their panel 10 in
+  function fitAccordion(el) {
+    const gal = el.querySelector('.tfAreaGallery'), picks = gal?.querySelector('.hcAccPicks');
+    if (!gal || !picks) return;
+    const panels = [...gal.querySelectorAll(':scope > .tfAreaPanel')], open = panels.find((p) => p.classList.contains('active')), folded = panels.filter((p) => p !== open);
+    panels.forEach((p) => p.classList.remove('hcAccHidden'));
+    const W = gal.clientWidth, H = gal.clientHeight, gap = parseFloat(getComputedStyle(gal).columnGap) || 16, FOLD = AREA_FOLDED;
+    let openW = parseFloat(el.style.getPropertyValue('--area-open')) || 2 * PEG + PEG_GAP;
+    const perCol = Math.max(1, Math.floor((H - 2 * ACC_PICK.pad + ACC_PICK.gap) / (ACC_PICK.h + ACC_PICK.gap)));
+    const pickW = (m) => { const c = Math.ceil(m / perCol); return m ? c * ACC_PICK.w + (c - 1) * ACC_PICK.gap + 2 * ACC_PICK.pad : 0; };
+    let k = folded.length;
+    const need = (n) => openW + n * (FOLD + gap) + (folded.length - n ? gap + pickW(folded.length - n) : 0);
+    while (k > 0 && need(k) > W + 0.5) k--;
+    const rest = folded.slice(k);
+    // not even the open area and the icons: the open area gives up the room
+    if (rest.length && need(0) > W) openW = Math.max(PEG_MIN, W - gap - pickW(rest.length));
+    el.style.setProperty('--area-open', openW + 'px');
+    rest.forEach((p) => p.classList.add('hcAccHidden'));
+    const hidden = new Set(rest.map((p) => p.dataset.area));
+    picks.hidden = !rest.length;
+    picks.style.setProperty('--picks-rows', perCol);
+    picks.querySelectorAll('[data-acc-pick]').forEach((b) => { b.hidden = !hidden.has(b.dataset.accPick); });
+    gal.classList.toggle('hcAccFits', !rest.length);
+  }
+  root.addEventListener('click', (ev) => {
+    const b = ev.target.closest?.('[data-acc-pick]');
+    if (!b || editing) return;
+    activeArea = b.dataset.accPick;
+    const el = grid.querySelector('.tfAreas[data-k="areas"]');
+    if (!el) return;
+    const html = areasHtml(el.style.order || 1);
+    units.set('areas', html);
+    replace(el, html);
+    layoutBoard();
+  });
   const areasHtml = (order) => {
     const shown = areasShown();
     if (!shown.some((r) => r.id === activeArea)) activeArea = firstArea(shown);
     const open = shown.find((r) => r.id === activeArea);
     return '<div class="tfAreas" data-tf data-k="areas" style="order:' + order + '">' +
-      '<section class="workoutGallery tfAreaGallery" aria-label="Areas">' + shown.map(areaPanel).join('') + '</section>' +
+      '<section class="workoutGallery tfAreaGallery" aria-label="Areas">' + shown.map(areaPanel).join('') + (AREAS_LAB ? accPicks(shown) : '') + '</section>' +
       '<div class="tfAreaPhone"><div class="tfAreaStage">' + (open ? roomTile(open, null, ' data-cols="2" data-rows="' + sizeOf('areas') + '"') : '') + '</div>' +
       '<div class="tfAreaPicks" role="group" aria-label="Areas">' + shown.map(areaPick).join('') + '</div></div></div>';
   };
@@ -1317,6 +1357,7 @@ export function mountTestFocus(root, { config, getHass }) {
       '<button class="tfName tfRoomDevName" type="button" data-more="' + esc(opens(k)) + '" aria-label="' + esc(r.name + ' ' + k.label.toLowerCase() + ', ' + k.value + '. Open') + '"><span class="activityRowName">' + esc(k.label) + '</span><span class="activityRowMeta">' + esc(k.value) + '</span></button></div>';
     // Edit area card: all four spaces, an empty one a dashed outline to drop into
     const empty = (i) => '<button class="tfRoomDev hcSlotEmpty" type="button" data-slot="' + i + '" aria-label="Empty space ' + (i + 1) + '"></button>';
+    // (the areas lab tried a name under each, 23 Nov; Matt: "we can remove the names below the icons. it doesn't work")
     const devices = edit ? [] : controls.map(opener); // (the editor shows the card wide: its spaces are the heads)
     // wide, the same devices as heads (icon, name, state), as the open room shows them (Matt, 6 Nov; Figma 954:6297): the
     // tile opens its control, its icon the switch
@@ -1836,7 +1877,110 @@ export function mountTestFocus(root, { config, getHass }) {
   }
   const dashWrap = (cls, key, label, titled) => (inner) => '<section class="card tfCard tfDashCard ' + cls + '" data-tf data-k="' + key + '" aria-label="' + label + '">' +
     (titled ? '<div class="activityHeader">' + (key === 'favs' ? '<button class="activityTitle tfTitleBtn" type="button" data-more="favourites" aria-label="Favourites. More info">' + label + '</button>' : '<div class="activityTitle">' + label + '</div>') + '</div>' : '') + '<div class="activityRows">' + inner + '</div></section>';
+  /* All areas (Matt, 23 Nov, an experiment in its own demo, homecore-areas-lab): every area in one card, all at the same
+     size, and the card picks that size from the room it has: "very mouldable to any display size so the ambience of a
+     dashboard becomes calmer and easier to navigate". Each area is the area tile as it is everywhere (Tile · Room), at
+     XS (a row: the head, the reading in it), S (the reading big), M (the line under it) or L (its devices along the
+     foot); the largest at which every area fits the card. Two columns wide or more, an area shows its devices as heads.
+     When even rows don't fit, the card scrolls sideways (a card never squeezes what it holds). Nothing opens or folds */
+  let flowRows = 2, flowCols = 1; // the size the areas were last laid out at, so a redraw draws them the same
+  const flowTile = (r) => roomTile(r, null, ' data-k="flow:' + esc(r.id) + '" data-rows="' + flowRows + '" data-cols="' + flowCols + '"');
+  const flowWrap = (inner) => '<section class="card tfCard tfDashCard tfDash-flow" data-tf data-k="flow" aria-label="Areas"><div class="activityHeader"><div class="activityTitle">Areas</div></div>' +
+    '<div class="hcFlow">' + inner + '</div></section>';
+  const FLOW_GAP = 10, FLOW_SIZES = [[4, 288], [3, 212], [2, 136], [1, 60]];
+  function fitFlow(el, pegW) {
+    const box = el.querySelector(':scope > .hcFlow'), tiles = box ? [...box.children] : [], N = tiles.length;
+    if (!N) return;
+    const W = box.clientWidth, H = box.clientHeight, G = FLOW_GAP, minW = Math.min(PEG_MIN, pegW - 2 * G);
+    const fitCols = Math.max(1, Math.floor((W + G) / (minW + G)));
+    // fewest rows first: every area in view, each row as tall as the card allows (a card of tiles fills its height)
+    let rows = Math.ceil(N / fitCols), rowH = (H - (rows - 1) * G) / rows, scroll = false;
+    if (rowH < 60) { rows = Math.max(1, Math.floor((H + G) / (60 + G))); rowH = (H - (rows - 1) * G) / rows; scroll = true; }
+    const cols = Math.ceil(N / rows), size = (FLOW_SIZES.find(([, h]) => rowH >= h) || FLOW_SIZES[3])[0];
+    const colW = scroll ? (W - (fitCols - 1) * G) / fitCols : (W - (cols - 1) * G) / cols;
+    const wide = colW >= 2 * PEG + PEG_GAP - 2 * G ? 2 : 1;
+    box.style.setProperty('--flow-cols', cols);
+    box.style.setProperty('--flow-rows', rows);
+    box.style.setProperty('--flow-col', scroll ? colW + 'px' : 'minmax(0,1fr)');
+    el.classList.toggle('hcFlowScroll', scroll);
+    el.dataset.flowSize = size;
+    flowRows = size;
+    flowCols = wide;
+    tiles.forEach((t) => { t.dataset.rows = size; t.dataset.cols = wide; });
+  }
+  /* the areas lab (Matt, 23 Nov: "a new space for building these cards and experimenting with them… I just want to work
+     on the functionality of these 3 ways to display cards"): Dashboards here holds only the areas, shown one of three
+     ways, picked at the top: One card (every area inside one card, as one space), Accordion (the Areas card) or Area
+     cards (each area its own card). Each is resized from its ⋯ in Edit, as on any board */
+  const LAB_MODES = [['one', 'One card · compact'], ['onefull', 'One card · full'], ['accordion', 'Accordion'], ['cards', 'Area cards']];
+  let labMode = (() => { try { return localStorage.getItem('hc-areas-lab-mode'); } catch (_e) { return null; } })();
+  if (!LAB_MODES.some(([k]) => k === labMode)) labMode = 'one';
+  root.addEventListener('click', (ev) => {
+    const b = ev.target.closest?.('[data-lab-mode]');
+    if (!b || b.dataset.labMode === labMode) return;
+    labMode = b.dataset.labMode;
+    try { localStorage.setItem('hc-areas-lab-mode', labMode); } catch (_e) { /* a private window keeps it for now */ }
+    render();
+  });
+  function areasLab(out) {
+    out.dash = true;
+    out.push({ key: 'dash:title', html: '<h1 class="settingsTitle tfDashTitle" data-tf data-k="dash:title">Areas</h1>' });
+    out.push({ key: 'sums', html: '<div class="tfDashBarRow hcLabBar" data-tf data-k="sums"><div class="hcLabModes" role="group" aria-label="Show the areas as">' +
+      LAB_MODES.map(([k, name]) => '<button type="button" data-lab-mode="' + k + '" aria-pressed="' + (k === labMode) + '">' + name + '</button>').join('') + '</div></div>' });
+    const shown = areasShown();
+    if (labMode === 'one') out.push({ key: 'flow', wrap: flowWrap, tiles: shown.map((r) => ({ key: 'flow:' + r.id, html: flowTile(r) })) });
+    // One card · full (Matt, 23 Nov: "what we have inside the separate cards, but it just being presented as one… the same
+    // title, the same tiles, the same main data point pulled up, but it just lives inside a card that represents itself
+    // as one"): each area is its own area card's content, all at one size (the card's ⋯ Height: XS to L), with no card
+    // of its own; the card is as tall as they need, the board's width, the areas on its columns
+    else if (labMode === 'onefull') {
+      const size = ffSize;
+      out.push({ key: 'flowfull', wrap: (inner) => '<section class="card tfCard tfDashCard tfDash-flowfull" data-tf data-k="flowfull" aria-label="Areas"><div class="activityHeader"><div class="activityTitle">Areas</div></div>' +
+        '<div class="hcFlowFull">' + inner + '</div></section>', tiles: shown.map((r) => ({ key: 'room:' + r.id, html: roomTile(r, 'room:' + r.id, ' data-rows="' + size + '" data-cols="1"') })) });
+    } else if (labMode === 'accordion') out.push({ key: 'areas', html: areasHtml(0) });
+    else shown.forEach((r) => out.push({ key: 'dash:tile:room:' + r.id, wrap: (inner) => '<div class="tfDashTiles" data-tf data-k="dash:tile:room:' + esc(r.id) + '">' + inner + '</div>',
+      tiles: [{ key: 'room:' + r.id, html: roomTile(r, 'room:' + r.id) }] }));
+    return out;
+  }
+  /* One card · full, sized by dragging (Matt, 23 Nov): its areas sit on its columns, as few rows as hold them all, each
+     row as tall as the card allows (to L, and no more than a quarter past it); each area at the largest size that fits
+     (XS, S, M, L). When even XS rows don't hold them, it scrolls sideways. On a phone: two to a row at M, as tall as
+     they need (a phone's board isn't edited) */
+  const FULL_MOST = 24; // its rows: it holds every area, so it may be taller than XL (the lab's one exception)
+  let ffSize = 3;
+  function fitFull(el, p, phone) {
+    const box = el.querySelector(':scope > .hcFlowFull'), tiles = box ? [...box.children] : [], N = tiles.length;
+    if (!N) return;
+    let size = 3, scroll = false;
+    if (phone) {
+      size = 4; // L on a phone: its devices go under the reading, two by two (a phone's area cards are L too)
+      box.style.setProperty('--ff-ct', 'repeat(2,minmax(0,1fr))');
+      box.style.setProperty('--ff-rt', 'none');
+      box.style.setProperty('--ff-auto', '288px');
+    } else {
+      const G = PEG_GAP, cols = Math.max(1, p.cols), W = box.clientWidth, H = box.clientHeight;
+      let rows = Math.ceil(N / cols), rowH = (H - (rows - 1) * G) / rows, across = cols;
+      if (rowH < 60) { rows = Math.max(1, Math.floor((H + G) / (60 + G))); rowH = (H - (rows - 1) * G) / rows; scroll = true; across = Math.ceil(N / rows); }
+      size = (FLOW_SIZES.find(([, h]) => rowH >= h) || FLOW_SIZES[3])[0];
+      const colW = (W - (cols - 1) * G) / cols, rowPx = Math.floor(Math.min(rowH, FLOW_SIZES.find(([sz]) => sz === size)[1] * 1.25));
+      box.style.setProperty('--ff-ct', 'repeat(' + across + ',' + (scroll ? colW + 'px' : 'minmax(0,1fr)') + ')');
+      box.style.setProperty('--ff-rt', 'repeat(' + rows + ',' + rowPx + 'px)');
+    }
+    el.classList.toggle('hcFlowScroll', scroll);
+    ffSize = size;
+    // where each area sits, for the lines between them (Matt, 23 Nov: "small dividing lines in the one card full")
+    const across = phone ? 2 : parseInt(box.style.getPropertyValue('--ff-ct').slice(7), 10) || 1, down = Math.ceil(N / across);
+    tiles.forEach((t, i) => {
+      t.dataset.rows = size;
+      const c = i % across, r = Math.floor(i / across);
+      t.toggleAttribute('data-ff-left', c === 0);
+      t.toggleAttribute('data-ff-right', c === across - 1 || i === N - 1);
+      t.toggleAttribute('data-ff-top', r === 0);
+      t.toggleAttribute('data-ff-bottom', r === down - 1 || i + across >= N);
+    });
+  }
   function dashboard(out, sums) {
+    if (AREAS_LAB && !overview) return areasLab(out);
     out.dash = true;
     out.push({ key: 'dash:title', html: '<h1 class="settingsTitle tfDashTitle" data-tf data-k="dash:title">' + ((overview ? welcomeOn() : dashPrefs().welcome) ? '<span class="tfGreeting">' + esc(greeting()) + '</span>' : '') + esc(getHass()?.config?.location_name || 'Home') + '</h1>' });
     // the summaries: a row of their own, the bar only as wide as its tiles
@@ -1882,9 +2026,9 @@ export function mountTestFocus(root, { config, getHass }) {
      cells, sizes, what's hidden, options). Phones keep one column */
   const PEG = 252, PEG_GAP = 16, PEG_MIN = 200, PEG_MAX = Math.round(PEG * 1.25), ROW = 60, ROW_PITCH = ROW + PEG_GAP, EXTRA_ROWS = 3;
   const BOARD_NAMES = { title: 'The name', sums: 'Summaries', wx: 'Weather', areas: 'Areas', favs: 'Favourites', act: 'Activity', energy: 'Energy today', avg: 'Compared to average', aq: 'Air quality', pollen: 'Pollen', radar: 'Rain radar',
-    sched: 'Schedule', hourly: 'Next hours', sun: 'Sun', moon: 'Moon', uv: 'UV index', humidity: 'Humidity', pressure: 'Pressure', wind: 'Wind', visibility: 'Visibility' };
+    sched: 'Schedule', flow: 'All areas', flowfull: 'All areas', hourly: 'Next hours', sun: 'Sun', moon: 'Moon', uv: 'UV index', humidity: 'Humidity', pressure: 'Pressure', wind: 'Wind', visibility: 'Visibility' };
   // the new cards are two columns, as Compared to average (Matt, 1 Nov: one was too narrow), a tile in their ⋯
-  const RESIZABLE = ['wx', 'favs', 'act', 'energy', 'avg'];
+  const RESIZABLE = ['wx', 'favs', 'act', 'energy', 'avg', 'flow'];
   // five heights, picked in an element's ⋯ (Matt, 2 Nov), each a whole number of rows: XS 1 (60, one tile), S 2 (136),
   // M 3 (212), L 4 (288), XL 5 (364). Each element starts at its kind's own (the weather, the areas, Favourites and
   // Activity XL; Energy today, Compared to average and the weather tiles L; every tile S, a Dual Axis Controller too:
@@ -1893,9 +2037,9 @@ export function mountTestFocus(root, { config, getHass }) {
   // a thermostat to M)
   const SIZE_NAMES = ['XS', 'S', 'M', 'L', 'XL'], ROWS_MOST = SIZE_NAMES.length;
   const WIDTH_NAMES = ['Narrow', 'Wide', 'Really wide'];
-  const SIZES = { wx: 5, areas: 5, favs: 5, act: 5, energy: 4, avg: 4, aq: 4, pollen: 4, radar: 4, hourly: 4, sun: 4, moon: 4, uv: 4, humidity: 4, pressure: 4, wind: 4, visibility: 4 };
+  const SIZES = { wx: 5, areas: 5, flow: 5, flowfull: 10, favs: 5, act: 5, energy: 4, avg: 4, aq: 4, pollen: 4, radar: 4, hourly: 4, sun: 4, moon: 4, uv: 4, humidity: 4, pressure: 4, wind: 4, visibility: 4 };
   // a tile whose entity isn't in the states yet keeps its saved height (it can't be measured, and must never stop the board)
-  const mostRows = (key) => (!key.includes('.') || !states[key] || (key.startsWith('light.') && wantsDac(key)) ? ROWS_MOST : Math.min(ROWS_MOST, cardControls(key).length + 1));
+  const mostRows = (key) => (key === 'flowfull' ? FULL_MOST : !key.includes('.') || !states[key] || (key.startsWith('light.') && wantsDac(key)) ? ROWS_MOST : Math.min(ROWS_MOST, cardControls(key).length + 1));
   const sizeOf = (key) => {
     const o = dashPrefs().opts[key] || {}, most = mostRows(key), h = Number(o.h) || (o.tall ? 5 : SIZES[key] || TILE_ROWS);
     return Math.max(1, Math.min(most, h));
@@ -1944,6 +2088,7 @@ export function mountTestFocus(root, { config, getHass }) {
     if (d.sumsOff) d = { ...d, hidden: [...d.hidden, 'sums'] }; // the summaries switched off in the edit tray
     const alt = d.byPegs?.[dashCols()];
     if (alt) d = { ...d, cells: alt.cells || d.cells, spans: alt.spans || d.spans };
+    if (AREAS_LAB) d = { ...d, cells: {} }; // the lab lays its areas out from the top left, in order
     const fresh = NEW_CARDS.filter((k) => !(d.known || []).includes(k) && !d.hidden.includes(k));
     return fresh.length ? { ...d, hidden: [...d.hidden, ...fresh] } : d;
   };
@@ -1952,7 +2097,7 @@ export function mountTestFocus(root, { config, getHass }) {
   // what's on the board: each card's key, its element, its width in pegs ('full' the whole width) and whether it's a tile
   function boardItems() {
     const q = (sel) => grid.querySelector(sel);
-    return [['title', q('.tfDashTitle'), 'full'], ['sums', q('.tfDashBarRow'), 'full'], ['wx', dashBoxes.wx, 2], ['areas', q('.tfAreas'), 'areas'],
+    return [['title', q('.tfDashTitle'), 'full'], ['sums', q('.tfDashBarRow'), 'full'], ['wx', dashBoxes.wx, 2], ['areas', q('.tfAreas'), 'areas'], ['flow', q('.tfDash-flow'), 2], ['flowfull', q('.tfDash-flowfull'), 99],
       ['favs', q('.tfDash-favs'), 2], ['sched', q('.tfDash-sched'), 2], ['act', q('.tfDash-act'), 2], ['energy', q('.tfDash-energy'), 2], ['avg', dashBoxes.avg, 2],
       ...NEW_CARDS.map((k) => [k, dashBoxes[k], WIDGET_COLS[k] || 1]),
       ...[...grid.querySelectorAll('.tfDashTiles > [data-k]')].map((el) => [el.dataset.k, el, 1, true])]
@@ -1964,6 +2109,8 @@ export function mountTestFocus(root, { config, getHass }) {
     // the areas: as wide as they need (Matt, 11 Nov: no width of their own to pick), so as wide as their rooms, up to the
     // board's edge from where they sit; the rooms that don't fit scroll
     if (it.span === 'areas') {
+      const saved = dashPrefs().spans.areas; // dragged in the areas lab: its own width, two columns at least (the open area)
+      if (AREAS_LAB && saved != null) { it.el.style.setProperty('--area-open', 2 * w + PEG_GAP + 'px'); return Math.max(Math.min(n, 2), Math.min(n, saved)); }
       // the open area two columns wide, whatever the card's width (Matt, 17 Nov: it took all the spare room, 2.7 wide)
       const open = 2 * w + PEG_GAP;
       it.el.style.setProperty('--area-open', open + 'px');
@@ -2155,6 +2302,10 @@ export function mountTestFocus(root, { config, getHass }) {
       // one column wide on a board of more (not a phone's single column): the card's narrow version (Matt, 6 Nov)
       it.el.toggleAttribute('data-narrow', !phone && p.cols === 1 && n > 1);
       it.el.dataset.cols = p.cols; // how many columns it spans (a room's tile lays out by it)
+      if (it.key === 'flow') fitFlow(it.el, w);
+      if (it.key === 'flowfull') fitFull(it.el, p, phone);
+      if (it.key === 'areas' && AREAS_LAB && !phone) fitAccordion(it.el);
+      if (it.key === 'flowfull') delete it.el.dataset.rows; // its size is its areas', not the card's (an XS card hides its title)
       // a DAC's pad takes what its cells leave under its name
       if (it.el.classList.contains('tfDac')) it.el.style.setProperty('--tf-dac-pad', (p.h - DAC_CHROME) + 'px');
       if (it === dragged && !drag.fromTray) return; // the dragged card follows the pointer; where it lands shows instead
@@ -2493,9 +2644,9 @@ export function mountTestFocus(root, { config, getHass }) {
       '<rect class="tfGridDots" x="' + (-half) + '" y="' + (-half) + '" width="' + (W + PEG_GAP) + '" height="' + (H + PEG_GAP) + '" fill="url(#tfGridDots)"></rect><path class="tfGridCross" d="' + x + '"></path></svg>';
   }
   function editTools(on, shown = [], placed = new Map(), height = 0, n = 1, w = PEG) {
-    grid.querySelectorAll('.tfEditChips').forEach((c) => { if (!on || !c.closest('.tfBoardItem')) c.remove(); });
+    grid.querySelectorAll('.tfEditChips,.hcRzBox').forEach((c) => { if (!on || !c.closest('.tfBoardItem')) c.remove(); });
     grid.querySelectorAll('.tfFavHides').forEach((c) => c.remove());
-    grid.querySelectorAll('.tfBoardItem').forEach((el) => [...el.children].forEach((c) => { if (!c.classList.contains('tfEditChips')) c.toggleAttribute('inert', on); }));
+    grid.querySelectorAll('.tfBoardItem').forEach((el) => [...el.children].forEach((c) => { if (!c.classList.contains('tfEditChips') && !c.classList.contains('hcRzBox')) c.toggleAttribute('inert', on); }));
     let cells = grid.querySelector('.tfBoardCells'), land = grid.querySelector('.tfBoardLand');
     if (!on) { cells?.remove(); land?.remove(); closeBoardMenu(); return height; }
     // the cells, with a few spare rows under the cards to drop into
@@ -2511,7 +2662,8 @@ export function mountTestFocus(root, { config, getHass }) {
       const host = it.el;
       if (!host || host.querySelector(':scope > .tfEditChips')) return;
       host.insertAdjacentHTML('beforeend', '<div class="tfEditChips"><span class="tfEditGrip" aria-hidden="true">' + GRIP + '</span>' +
-        '<button class="tfEditChip" type="button" data-board-more="' + esc(it.key) + '" aria-label="' + esc(boardName(it.key)) + ' options" aria-haspopup="menu">' + DOTS + '</button></div>');
+        '<button class="tfEditChip" type="button" data-board-more="' + esc(it.key) + '" aria-label="' + esc(boardName(it.key)) + ' options" aria-haspopup="menu">' + DOTS + '</button></div>' +
+        (AREAS_LAB ? '<div class="hcRzBox" aria-hidden="true">' + RZ_DIRS.map((d) => '<span class="hcRz hcRz-' + d + '" data-rz="' + d + '" data-rz-key="' + esc(it.key) + '"></span>').join('') + '</div>' : ''));
     });
     if (drag && placed.has(drag.key)) {
       if (!land) { land = Object.assign(document.createElement('div'), { className: 'tfBoardLand' }); grid.appendChild(land); }
@@ -3707,8 +3859,57 @@ export function mountTestFocus(root, { config, getHass }) {
     else if (fav?.classList.contains('off') && !ev.target.closest('button')) dragOut(ev, fav, 'fav', fav.dataset.trayFav);
   });
   // dragging: the card follows the pointer and lands on the nearest cell; cards in the way move down to make room
+  /* resizing in the areas lab (Matt, 23 Nov: "take the bottom right-hand corner, or from the side, or from any side,
+     and drag it, and it will resize and bento box nicely together… still fit within the grid… the way that the rules
+     work of sizing"): every side and corner of a card in Edit has a handle. Its width snaps to whole columns (one
+     column at a time, from one to all of them) and its height to whole rows (XS to XL; One card · full taller, as it holds every
+     area); the other cards pack round it from the top left as it goes */
+  const RZ_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+  const rzLimits = (key) => ({ c0: key === 'areas' ? 2 : 1, r0: key === 'flowfull' ? 2 : 1, r1: mostRows(key) });
+  function rzDown(ev) {
+    const h = ev.target.closest?.('[data-rz]');
+    if (!h || !editing || ev.button !== 0) return;
+    const key = h.dataset.rzKey, dir = h.dataset.rz, p = lastPlaced.get(key), el = h.closest('.tfBoardItem');
+    if (!p || !el) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    closeBoardMenu();
+    const { n, w } = pegsFor(grid.clientWidth), lim = rzLimits(key), x0 = ev.clientX, y0 = ev.clientY;
+    // any whole number of columns (Matt, 23 Nov: "it also now needs to work horizontally… as I drag it from, say, right
+    // to left, the cards will move and box together"), so the cards beside it slide along a column at a time
+    const widths = Array.from({ length: n }, (_, i) => i + 1).filter((c) => c >= Math.min(lim.c0, n));
+    el.classList.add('hcResizing');
+    el.dataset.rzDir = dir;
+    let last = p.cols + 'x' + p.rows, raf = 0;
+    const move = (e) => {
+      const dx = (e.clientX - x0) / boardScale(), dy = (e.clientY - y0) / boardScale(), dc = Math.round(dx / (w + PEG_GAP)), dr = Math.round(dy / ROW_PITCH);
+      let cols = p.cols + (dir.includes('e') ? dc : dir.includes('w') ? -dc : 0), rows = p.rows + (dir.includes('s') ? dr : dir.includes('n') ? -dr : 0);
+      cols = widths.reduce((a, b) => (Math.abs(b - cols) < Math.abs(a - cols) ? b : a), widths[0]);
+      rows = Math.max(lim.r0, Math.min(lim.r1, rows));
+      if (cols + 'x' + rows === last) return;
+      last = cols + 'x' + rows;
+      const dash = dashPrefs();
+      saveDash({ ...dash, spans: { ...dash.spans, [key]: cols >= n ? 99 : cols }, opts: { ...dash.opts, [key]: { ...(dash.opts[key] || {}), h: rows, tall: undefined } } });
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; layoutBoard(); });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      el.classList.remove('hcResizing');
+      delete el.dataset.rzDir;
+      const eat = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
+      window.addEventListener('click', eat, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 300);
+      layoutBoard();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  }
   function boardDown(ev) {
-    if (!editing || cardEdit || ev.button !== 0 || ev.target.closest('[data-board-more],.tfBoardMenu,.tfFavHides')) return;
+    if (!editing || cardEdit || ev.button !== 0 || ev.target.closest('[data-board-more],.tfBoardMenu,.tfFavHides,[data-rz]')) return;
+    if (AREAS_LAB) return; // the lab's cards keep their order, packed from the top left; they're resized, not moved
     const el = ev.target.closest('.tfBoardItem');
     const it = el && boardItems().find((x) => x.el === el);
     if (!it || HEAD.includes(it.key)) return;
@@ -5273,6 +5474,7 @@ export function mountTestFocus(root, { config, getHass }) {
     root.querySelector('.bottomNav')?.insertAdjacentHTML('beforeend', '<button class="navBtn" id="dashEditNav" type="button" title="Edit" aria-label="Edit the dashboard" aria-pressed="false" hidden>' + PENCIL + '</button>');
     $('dashEditNav')?.addEventListener('click', () => (overview ? setHomeEditing(!homeEditing) : setEditing(!editing)));
     grid.addEventListener('pointerdown', cardItemDown, true); // a card's parts, while its page is open
+    grid.addEventListener('pointerdown', rzDown);
     grid.addEventListener('pointerdown', boardDown);
     grid.addEventListener('pointerdown', homeDown);
     grid.addEventListener('scroll', (ev) => { if (ev.target.classList?.contains('hcSchedList') || ev.target.classList?.contains('hcFadeList')) schedFade(ev.target); }, true);

@@ -306,7 +306,7 @@
   #app.hcDemo.tfDash:not(.tfEditing):not(.hcOnPage):not(.tfOverview) #homeView>.grid{display:flex!important;flex-wrap:wrap;align-items:flex-start;gap:var(--grid-gap);height:auto!important}
   #app.hcDemo.tfDash:not(.tfEditing):not(.tfOverview) #homeView>.grid .tfBoardItem{position:relative!important;left:auto!important;top:auto!important}
   /* Favourites keeps its own height, so turning suggestions on or off doesn't move the page (Matt, 9 Nov) */
-  #app.hcDemo.tfDash:not(.tfEditing):not(.tfOverview) #homeView>.grid>.tfBoardItem:not(.tfDash-favs){height:auto!important}
+  #app.hcDemo.tfDash:not(.tfEditing):not(.tfOverview) #homeView>.grid>.tfBoardItem:not(.tfDash-favs):not(.tfDash-flow){height:auto!important}
   /* the weather's forecast line takes its own height (it filled the space a card had left over) */
   #app.hcDemo.tfDash:not(.tfEditing) .tfDash-wx .wbSummary{flex:none;margin-top:0;container-type:normal}
   #app.hcDemo.tfDash:not(.tfEditing) .tfDash-wx .wbSummaryText{position:static}

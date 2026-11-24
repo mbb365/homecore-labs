@@ -506,6 +506,7 @@ button.tfAreaIcon{cursor:pointer}
 #app.tfDash .tfDashBarRow{order:2!important;flex:0 0 100%;display:flex;min-width:0}
 #app.tfDash .tfDash-wx{order:var(--o,3)!important}
 #app.tfDash .tfAreas{order:var(--o,4)!important}
+#app.tfDash :is(.tfDash-flow,.tfDash-flowfull){order:var(--o,4)!important}
 #app.tfDash .tfDash-favs{order:var(--o,5)!important}
 #app.tfDash .tfDash-act{order:var(--o,6)!important}
 #app.tfDash .tfDash-sched{order:var(--o,6)!important} /* Home's Schedule, in its place on phones too */
@@ -1379,3 +1380,82 @@ button.tfAreaIcon{cursor:pointer}
 .hcAceGhost .tfIcon{background:var(--hc-icon);color:var(--hc-icon-ink)}
 .hcAceToggle{margin-left:auto}
 @media(max-width:620px){.hcAce{padding:0 16px}.hcAceList{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- All areas (Matt, 23 Nov; the areas lab): every area in one card at one size, picked by fitFlow ---------- */
+#app.tfDash .tfDash-flow{display:flex;flex-direction:column;min-height:0}
+#app.tfDash .tfDash-flow>.hcFlow{flex:1;min-height:0;display:grid;gap:10px;grid-template-columns:repeat(var(--flow-cols,2),var(--flow-col,minmax(0,1fr)));grid-template-rows:repeat(var(--flow-rows,1),minmax(0,1fr))}
+#app.tfDash .tfDash-flow.hcFlowScroll>.hcFlow{overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none}
+#app.tfDash .tfDash-flow.hcFlowScroll>.hcFlow::-webkit-scrollbar{display:none}
+#app.tfDash .tfDash-flow.hcFlowScroll>.hcFlow>.tfRoomTile{scroll-snap-align:start}
+#app.tfDash .tfDash-flow>.hcFlow>.tfRoomTile{grid-column:auto;grid-row:auto;min-width:0;min-height:0;height:auto;box-sizing:border-box}
+/* XS: a row (the head laid flat, the reading in it): 10 in, corner 24 */
+/* One card: the areas inside are the card's own space, not cards of their own (Matt, 23 Nov: "visually represent as one
+   card… all these other subcards inside it, but it all looks just like one space"): no fill, no edge, 10 in like a
+   tile in a card */
+#app.tfDash .tfDash-flow>.hcFlow>.tfRoomTile{padding:10px;border-radius:24px;background:none;box-shadow:none}
+#app.tfDash .tfDash-flow>.hcFlow>.tfRoomTile[data-rows="1"]{justify-content:center}
+/* the lab's pick of display: the segmented control (track 4 in, segments 38, the picked one bright) */
+#app.tfDash .hcLabBar{display:flex}
+.hcLabModes{display:inline-flex;gap:4px;padding:4px;border-radius:16px;background:var(--tile);box-shadow:var(--hc-hair-all)}
+.hcLabModes>button{height:38px;padding:0 16px;border:0;border-radius:12px;background:transparent;color:var(--muted);font:600 14px/20px var(--font-tile);cursor:pointer;white-space:nowrap}
+.hcLabModes>button:hover:not([aria-pressed="true"]){color:var(--text)}
+.hcLabModes>button[aria-pressed="true"]{background:var(--bright);color:var(--on-bright)}
+/* One card · full: the area cards' content, all inside one card (no card of their own), on the board's columns */
+#app.tfDash .tfDash-flowfull{display:flex;flex-direction:column}
+#app.tfDash .tfDash-flowfull>.hcFlowFull{flex:1;min-height:0;display:grid;grid-template-columns:var(--ff-ct,repeat(4,minmax(0,1fr)));grid-template-rows:var(--ff-rt,none);grid-auto-rows:var(--ff-auto,212px);gap:16px;align-content:start}
+#app.tfDash .tfDash-flowfull.hcFlowScroll>.hcFlowFull{overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:none}
+#app.tfDash .tfDash-flowfull>.hcFlowFull>.tfRoomTile{grid-column:auto;grid-row:auto;min-width:0;height:auto;box-sizing:border-box;background:none;box-shadow:none}
+/* on a phone the areas are half the card: 10 in, as a tile in a card, so three devices fit on their line */
+@media(max-width:620px){#app.tfDash .tfDash-flowfull>.hcFlowFull>.tfRoomTile{padding:10px}#app.tfDash .tfDash-flowfull>.hcFlowFull{gap:10px}}
+/* the lab's resize handles (Edit): a strip along each side and a square at each corner; the bottom-right corner
+   always shows its mark, a side shows its pill when pointed at or pulled */
+.hcRzBox{position:absolute;inset:0;z-index:4;pointer-events:none}
+.hcRz{position:absolute;pointer-events:auto;touch-action:none}
+.hcRz-n,.hcRz-s{left:28px;right:28px;height:16px;cursor:ns-resize}
+.hcRz-n{top:-8px}.hcRz-s{bottom:-8px}
+.hcRz-e,.hcRz-w{top:28px;bottom:28px;width:16px;cursor:ew-resize}
+.hcRz-e{right:-8px}.hcRz-w{left:-8px}
+.hcRz-ne,.hcRz-nw,.hcRz-se,.hcRz-sw{width:28px;height:28px}
+.hcRz-ne{top:-8px;right:-8px;cursor:nesw-resize}.hcRz-sw{bottom:-8px;left:-8px;cursor:nesw-resize}
+.hcRz-nw{top:-8px;left:-8px;cursor:nwse-resize}.hcRz-se{bottom:-8px;right:-8px;cursor:nwse-resize}
+.hcRz-n::after,.hcRz-s::after,.hcRz-e::after,.hcRz-w::after{content:"";position:absolute;left:50%;top:50%;border-radius:99px;background:var(--primary);opacity:0;transition:opacity .15s;translate:-50% -50%}
+.hcRz-n::after,.hcRz-s::after{width:40px;height:5px}
+.hcRz-e::after,.hcRz-w::after{width:5px;height:40px}
+.hcRz:hover::after,.hcResizing:is([data-rz-dir*="n"]) .hcRz-n::after,.hcResizing:is([data-rz-dir*="s"]) .hcRz-s::after,.hcResizing:is([data-rz-dir*="e"]) .hcRz-e::after,.hcResizing:is([data-rz-dir*="w"]) .hcRz-w::after{opacity:1}
+.hcRz-se::before{content:"";position:absolute;right:12px;bottom:12px;width:12px;height:12px;border-right:3px solid var(--muted);border-bottom:3px solid var(--muted);border-bottom-right-radius:8px;opacity:.7}
+.hcRz-se:hover::before,.hcResizing[data-rz-dir="se"] .hcRz-se::before{border-color:var(--primary);opacity:1}
+.hcResizing{outline:2px solid var(--primary);outline-offset:2px;transition:none!important}
+/* on the scaled board (the tray open) the handles keep their size, as the grips and chips do */
+#app.tfBoard #homeView>.grid .hcRzBox{--rz:calc(1 / var(--board-k,1))}
+#app.tfBoard #homeView>.grid :is(.hcRz-n,.hcRz-s){height:calc(16px * var(--rz));left:calc(28px * var(--rz));right:calc(28px * var(--rz))}
+#app.tfBoard #homeView>.grid .hcRz-n{top:calc(-8px * var(--rz))}#app.tfBoard #homeView>.grid .hcRz-s{bottom:calc(-8px * var(--rz))}
+#app.tfBoard #homeView>.grid :is(.hcRz-e,.hcRz-w){width:calc(16px * var(--rz));top:calc(28px * var(--rz));bottom:calc(28px * var(--rz))}
+#app.tfBoard #homeView>.grid .hcRz-e{right:calc(-8px * var(--rz))}#app.tfBoard #homeView>.grid .hcRz-w{left:calc(-8px * var(--rz))}
+#app.tfBoard #homeView>.grid :is(.hcRz-ne,.hcRz-nw,.hcRz-se,.hcRz-sw){width:28px;height:28px;scale:var(--rz)}
+#app.tfBoard #homeView>.grid .hcRz-ne{transform-origin:100% 0}#app.tfBoard #homeView>.grid .hcRz-nw{transform-origin:0 0}
+#app.tfBoard #homeView>.grid .hcRz-se{transform-origin:100% 100%}#app.tfBoard #homeView>.grid .hcRz-sw{transform-origin:0 100%}
+#app.tfBoard #homeView>.grid :is(.hcRz-n,.hcRz-s,.hcRz-e,.hcRz-w)::after{scale:var(--rz)}
+/* the lab's cards are resized, not moved (they keep their order): no grip */
+#app.tfBoard #homeView>.grid .tfBoardItem>.tfEditChips>.tfEditGrip{display:none}
+
+/* ---------- areas lab, 23 Nov ---------- */
+/* a narrow area card's devices (its icons on their own): two by two at most, 12 apart, on the foot under the reading.
+   At M the big reading sits above the 2×2 too (Matt, 23 Nov: "from this height of area card we can pull out the main datapoint") */
+#app.tfBoard .tfAction.tfRoomTile[data-cols="1"]:is([data-rows="3"],[data-rows="4"],[data-rows="5"]) .tfRoomDevices{display:grid;grid-template-columns:repeat(2,40px);gap:12px;margin-top:auto}
+#app.tfBoard .tfAction.tfRoomTile[data-cols="1"] .tfRoomBig{display:block;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+/* One card · full: a hairline between the areas, in the middle of the gap */
+#app.tfDash .tfDash-flowfull{--ff-gap:16px}
+#app.tfDash .tfDash-flowfull>.hcFlowFull>.tfRoomTile{position:relative;overflow:visible}
+#app.tfDash .tfDash-flowfull>.hcFlowFull>.tfRoomTile:not([data-ff-top])::before{content:"";position:absolute;top:calc(var(--ff-gap) / -2);left:calc(var(--ff-gap) / -2);right:calc(var(--ff-gap) / -2);height:.4px;background:var(--line);pointer-events:none}
+#app.tfDash .tfDash-flowfull>.hcFlowFull>.tfRoomTile:not([data-ff-left])::after{content:"";position:absolute;left:calc(var(--ff-gap) / -2);top:calc(var(--ff-gap) / -2);bottom:calc(var(--ff-gap) / -2);width:.4px;background:var(--line);pointer-events:none}
+#app.tfDash .tfDash-flowfull>.hcFlowFull>.tfRoomTile[data-ff-left]::before{left:0}
+#app.tfDash .tfDash-flowfull>.hcFlowFull>.tfRoomTile[data-ff-right]::before{right:0}
+#app.tfDash .tfDash-flowfull>.hcFlowFull>.tfRoomTile[data-ff-top]::after{top:0}
+#app.tfDash .tfDash-flowfull>.hcFlowFull>.tfRoomTile[data-ff-bottom]::after{bottom:0}
+@media(max-width:620px){#app.tfDash .tfDash-flowfull{--ff-gap:10px}}
+/* the accordion's areas that don't fit: icons with their names, in columns after the folded ones */
+#app.tfDash .tfAreaPanel.hcAccHidden{display:none}
+.hcAccPicks{flex:none;display:grid;grid-auto-flow:column;grid-template-rows:repeat(var(--picks-rows,4),40px);grid-auto-columns:40px;gap:8px;align-content:center;padding:10px;border-radius:28px;background:var(--card);box-shadow:var(--hc-hair)} /* a panel of its own, as a folded area is */
+.hcAccPicks[hidden],.hcAccPick[hidden]{display:none}
+.hcAccPick{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;padding:0;border:0;background:none;color:var(--text);cursor:pointer}
+.hcAccPick>.tfIcon{background:var(--hc-icon-soft);color:var(--text)}

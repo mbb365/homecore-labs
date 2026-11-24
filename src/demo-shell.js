@@ -367,6 +367,6 @@ export function mountDemoShell(root, { getHass, homecore }) {
   go(location.hash.replace(/^#\/?/, '') || 'home');
   mountIntro(root, app); // the load-in, once
   // its tweaker, on the dev server only (never in the built site): delete this line and intro-tweaker.js to drop it
-  if (import.meta.env.DEV) import('./intro-tweaker.js').then((m) => m.mountIntroTweaker(root, app));
+  // (the areas lab has no load-in tweaker: it covered the cards)
   return { go };
 }
