@@ -1902,6 +1902,20 @@ export function mountTestFocus(root, { config, getHass }) {
     const cs = getComputedStyle(el), edge = (k) => parseFloat(cs['padding' + k]) + parseFloat(cs['border' + k + 'Width']);
     return [p.w - box.offsetLeft - edge('Right'), p.h - box.offsetTop - edge('Bottom')];
   };
+  /* dragged down to one row, One card · compact is the summaries strip (Matt, 24 Nov: "When in one row, it should be like
+     a summary height and behaviour, at the moment it is acting like a long action card"; "Wrap like summaries"): no
+     title, each area as wide as its name and reading (200 at least), no gaps, as few lines as hold every area, and the
+     card as tall as those lines, 10 in */
+  const flowStrip = () => AREAS_LAB && sizeOf('flow') === 1;
+  function fitStrip(el) {
+    const box = el.querySelector(':scope > .hcFlow'), tiles = box ? [...box.children] : [], N = tiles.length;
+    el.classList.remove('hcFlowScroll');
+    el.dataset.flowSize = 1;
+    flowRows = 1;
+    flowCols = 1;
+    tiles.forEach((t) => { t.dataset.rows = 1; t.dataset.cols = 1; });
+    for (let lines = 1; lines <= N; lines++) { box.style.setProperty('--strip-cols', String(Math.ceil(N / lines))); if (box.scrollWidth <= box.clientWidth + 1) break; }
+  }
   function fitFlow(el, pegW, p) {
     const box = el.querySelector(':scope > .hcFlow'), tiles = box ? [...box.children] : [], N = tiles.length;
     if (!N) return;
@@ -2137,7 +2151,7 @@ export function mountTestFocus(root, { config, getHass }) {
     return Math.min(n, dashPrefs().spans[it.key] ?? it.span);
   };
   // a card's rows: its height's
-  const rowsOf = (it) => sizeOf(it.key);
+  const rowsOf = (it) => (it.key === 'flow' && flowStrip() ? null : sizeOf(it.key)); // the strip is as tall as its lines
   // a phone's Areas (a phone's cards are as tall as what they hold, demo.css): its card 1325:982 (Matt's drawing), 14 to
   // the buttons, eight to a row 8 apart inside the page's 16. Its rows, for a board that places it, hold all of that
   const PHONE_AREAS = window.matchMedia('(max-width: 620px)');
@@ -2303,6 +2317,7 @@ export function mountTestFocus(root, { config, getHass }) {
       it.el.classList.add('tfBoardItem');
       it.el.style.width = (it.cols === n ? W : it.cols * w + (it.cols - 1) * PEG_GAP) + 'px';
       it.el.style.height = '';
+      if (it.key === 'flow') { it.el.classList.toggle('hcFlowStrip', flowStrip()); if (flowStrip()) fitStrip(it.el); }
       it.rows = rowsOf(it) ?? Math.max(1, Math.ceil((it.el.offsetHeight + PEG_GAP - 6) / ROW_PITCH));
       if (it.key === 'areas' && PHONE_AREAS.matches) it.rows = phoneAreaRows(parseFloat(it.el.style.width));
     });
@@ -2320,7 +2335,7 @@ export function mountTestFocus(root, { config, getHass }) {
       // one column wide on a board of more (not a phone's single column): the card's narrow version (Matt, 6 Nov)
       it.el.toggleAttribute('data-narrow', !phone && p.cols === 1 && n > 1);
       it.el.dataset.cols = p.cols; // how many columns it spans (a room's tile lays out by it)
-      if (it.key === 'flow') fitFlow(it.el, w, p);
+      if (it.key === 'flow') { if (flowStrip()) it.el.style.height = ''; else fitFlow(it.el, w, p); } // the strip: its lines' height, not its cells'
       if (it.key === 'flowfull') fitFull(it.el, p, phone);
       if (it.key === 'areas' && AREAS_LAB && !phone) fitAccordion(it.el);
       if (it.key === 'flowfull') delete it.el.dataset.rows; // its size is its areas', not the card's (an XS card hides its title)
@@ -3924,6 +3939,7 @@ export function mountTestFocus(root, { config, getHass }) {
     el.classList.add('hcResizing');
     el.dataset.rzDir = dir;
     let last = p.cols + 'x' + p.rows, raf = 0;
+    const h0 = dashPrefs().opts[key]?.h; // its height as it was
     const move = (e) => {
       const dx = (e.clientX - x0) / boardScale(), dy = (e.clientY - y0) / boardScale(), dc = Math.round(dx / (w + PEG_GAP)), dr = Math.round(dy / ROW_PITCH);
       let cols = p.cols + (dir.includes('e') ? dc : dir.includes('w') ? -dc : 0), rows = p.rows + (dir.includes('s') ? dr : dir.includes('n') ? -dr : 0);
@@ -3932,7 +3948,9 @@ export function mountTestFocus(root, { config, getHass }) {
       if (cols + 'x' + rows === last) return;
       last = cols + 'x' + rows;
       const dash = dashPrefs();
-      saveDash({ ...dash, spans: { ...dash.spans, [key]: cols >= n ? 99 : cols }, opts: { ...dash.opts, [key]: { ...(dash.opts[key] || {}), h: rows, tall: undefined } } });
+      // its height only when it's dragged up or down: a sideways drag keeps it (the strip, as tall as its lines, stays the strip)
+      const h = rows !== p.rows ? rows : h0 ?? rows;
+      saveDash({ ...dash, spans: { ...dash.spans, [key]: cols >= n ? 99 : cols }, opts: { ...dash.opts, [key]: { ...(dash.opts[key] || {}), h, tall: undefined } } });
       if (!raf) raf = requestAnimationFrame(() => { raf = 0; layoutBoard(); });
     };
     const up = () => {

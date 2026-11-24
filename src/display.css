@@ -1463,3 +1463,9 @@ button.tfAreaIcon{cursor:pointer}
 .tfBoardMenu .hcFreeTabs{display:flex;align-items:center}
 .tfBoardMenu .hcFreeTabs button{cursor:default}
 .tfBoardMenu .hcFreeHint{padding:0 10px;color:var(--muted);font:400 14px/20px var(--font);white-space:nowrap}
+/* One card · compact at one row: the summaries strip (Matt, 24 Nov): no title, rows 60 as wide as they need (200 at
+   least), no gaps, as few lines as hold them all (--strip-cols), the card 10 in and as tall as its lines */
+#app.tfBoard .tfBoardItem.tfDashCard.tfDash-flow.hcFlowStrip{padding:10px} /* over the XS card's none: the strip is 10 in, as the summaries are */
+#app.tfDash .tfDash-flow.hcFlowStrip>.activityHeader{display:none}
+#app.tfDash .tfDash-flow.hcFlowStrip>.hcFlow{flex:none;contain:none;overflow:hidden;gap:0;grid-template-columns:repeat(var(--strip-cols,3),auto);grid-template-rows:none;grid-auto-rows:60px;justify-content:start;align-content:start}
+#app.tfDash .tfDash-flow.hcFlowStrip>.hcFlow>.tfRoomTile{min-width:200px;height:60px;padding:10px}
