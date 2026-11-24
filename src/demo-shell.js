@@ -21,9 +21,10 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 // Home is the logo at the top (Matt, 9 Nov); Map has Home's old place
 // Home (the house) is the overview, the simple default page, and Dashboards (Home Assistant's dashboard icon) the board
 // you edit, which was Home (Matt, 12 Nov)
-const BOARDS = new Set(['home', 'dashboards']);
+// the Areas lab is a board of its own, apart from Dashboards (Matt, 24 Nov)
+const BOARDS = new Set(['home', 'dashboards', 'areas']);
 // Home's own button went (Matt, 12 Nov): the logo opens Home
-const RAIL = [['dashboards', 'Dashboards', 'mdi:view-dashboard'], ['map', 'Map', 'mdi:tooltip-account'], ['weather', 'Weather', 'mdi:weather-partly-cloudy'], ['devices', 'Devices', 'mdi:devices']];
+const RAIL = [['dashboards', 'Dashboards', 'mdi:view-dashboard'], ['areas', 'Areas lab', 'mdi:sofa'], ['map', 'Map', 'mdi:tooltip-account'], ['weather', 'Weather', 'mdi:weather-partly-cloudy'], ['devices', 'Devices', 'mdi:devices']];
 // behind ⋯: the rest of Home Assistant's sidebar today, in its order
 // (Energy, History and Media went: Matt, 9 Nov, "they confuse it")
 // HomeCore's own settings are HomeCore settings (Matt, 9 Nov); Home Assistant's Settings has the cog, above you
@@ -39,7 +40,7 @@ function renderMap(page, ctx) {
 const PAGES = { devices: renderDevices, map: renderMap, account: renderAccount, activity: renderActivity, config: renderConfig, about: renderAbout };
 // Activity is the demo's own page now (Home Assistant's logbook with its filters: Matt, 9 Nov)
 const HOMECORE_PAGES = new Set(['weather']);
-const ROUTES = new Set(['home', 'dashboards', 'settings', ...HOMECORE_PAGES, ...Object.keys(PAGES)]);
+const ROUTES = new Set([...BOARDS, 'settings', ...HOMECORE_PAGES, ...Object.keys(PAGES)]);
 
 export function mountDemoShell(root, { getHass, homecore }) {
   const $ = (id) => root.getElementById(id);
@@ -112,7 +113,7 @@ export function mountDemoShell(root, { getHass, homecore }) {
      'home', a page, 'settings', or 'area:<key>' for HomeCore's own pages (Weather, Logbook, a room) */
   let trail = [], going = false, cur = 'home';
   let setOpen = () => {}; // HomeCore settings on a phone: which of its pages is open (tuneSettings fills it in)
-  const board = () => (homecore.overview === false ? 'dashboards' : 'home');
+  const board = () => (homecore.overview === false ? (homecore.lab ? 'areas' : 'dashboards') : 'home');
   const where = () => (settingsView.classList.contains('active') ? 'settings' : homecore.page ? 'area:' + homecore.page : pageOn || board());
   const BACK_SVG = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18L9 12L15 6"/></svg>';
   const ctx = { getHass, homecore, root, esc, icon, opts: null,
@@ -174,7 +175,7 @@ export function mountDemoShell(root, { getHass, homecore }) {
       if (HOMECORE_PAGES.has(route)) { showPage(null); if (homecore.page !== route) homecore.openArea(route); }
       else {
         if (homecore.page) homecore.closeArea();
-        if (BOARDS.has(route)) homecore.setOverview(route === 'home');
+        if (BOARDS.has(route)) { homecore.setLab(route === 'areas'); homecore.setOverview(route === 'home'); }
         showPage(BOARDS.has(route) ? null : route, again);
       }
     }

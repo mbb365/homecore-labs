@@ -1436,13 +1436,13 @@ button.tfAreaIcon{cursor:pointer}
 #app.tfBoard #homeView>.grid .hcRz-se{transform-origin:100% 100%}#app.tfBoard #homeView>.grid .hcRz-sw{transform-origin:0 100%}
 #app.tfBoard #homeView>.grid :is(.hcRz-n,.hcRz-s,.hcRz-e,.hcRz-w)::after{scale:var(--rz)}
 /* the lab's cards are resized, not moved (they keep their order): no grip */
-#app.tfBoard #homeView>.grid .tfBoardItem>.tfEditChips>.tfEditGrip{display:none}
+#app.tfBoard.hcLab #homeView>.grid .tfBoardItem>.tfEditChips>.tfEditGrip{display:none}
 
 /* ---------- areas lab, 23 Nov ---------- */
 /* a narrow area card's devices (its icons on their own): two by two at most, 12 apart, on the foot under the reading.
    At M the big reading sits above the 2×2 too (Matt, 23 Nov: "from this height of area card we can pull out the main datapoint") */
-#app.tfBoard .tfAction.tfRoomTile[data-cols="1"]:is([data-rows="3"],[data-rows="4"],[data-rows="5"]) .tfRoomDevices{display:grid;grid-template-columns:repeat(2,40px);gap:12px;margin-top:auto}
-#app.tfBoard .tfAction.tfRoomTile[data-cols="1"] .tfRoomBig{display:block;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#app.tfBoard.hcLab .tfAction.tfRoomTile[data-cols="1"]:is([data-rows="3"],[data-rows="4"],[data-rows="5"]) .tfRoomDevices{display:grid;grid-template-columns:repeat(2,40px);gap:12px;margin-top:auto}
+#app.tfBoard.hcLab .tfAction.tfRoomTile[data-cols="1"] .tfRoomBig{display:block;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 /* One card · full: a hairline between the areas, in the middle of the gap */
 #app.tfDash .tfDash-flowfull{--ff-gap:16px}
 #app.tfDash .tfDash-flowfull>.hcFlowFull>.tfRoomTile{position:relative;overflow:visible}
