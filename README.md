@@ -2,7 +2,9 @@
 
 Experiments on the HomeCore demo, kept apart from the demo for leadership (https://mbb365.github.io/homecore-demo/, repo mbb365/homecore-demo). Nothing here changes that demo; an experiment moves over only once it's agreed.
 
-Private: only people invited to this repo can see it.
+Try it: https://mbb365.github.io/homecore-labs/
+
+Every push to `main` updates that link. Anyone with the link can open it; only people invited to this repo can push changes.
 
 ## Run it
 
