@@ -2,29 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "homecore-demo",
+      "name": "homecore-labs",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
         "vite",
         "--port",
-        "5195",
+        "5240",
         "--strictPort"
       ],
-      "port": 5195
-    },
-    {
-      "name": "homecore-built",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": [
-        "vite",
-        "preview",
-        "--port",
-        "5196",
-        "--strictPort",
-        "--base",
-        "/homecore-demo/"
-      ],
-      "port": 5196
+      "port": 5240
     }
   ]
 }

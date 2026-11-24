@@ -1,11 +1,11 @@
 {
-  "name": "homecore-demo",
+  "name": "homecore-labs",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "HomeCore demo: the HomeCore house page with a made-up house, no Home Assistant needed",
+  "description": "HomeCore Labs: experiments on the HomeCore demo, kept apart from the demo for leadership",
   "scripts": {
-    "dev": "vite --port 5195 --open /",
+    "dev": "vite --port 5240 --open /",
     "build": "vite build",
     "preview": "vite preview"
   },
