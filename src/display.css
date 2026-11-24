@@ -1383,7 +1383,7 @@ button.tfAreaIcon{cursor:pointer}
 
 /* ---------- All areas (Matt, 23 Nov; the areas lab): every area in one card at one size, picked by fitFlow ---------- */
 #app.tfDash .tfDash-flow{display:flex;flex-direction:column;min-height:0}
-#app.tfDash .tfDash-flow>.hcFlow{flex:1;min-height:0;display:grid;gap:10px;grid-template-columns:repeat(var(--flow-cols,2),var(--flow-col,minmax(0,1fr)));grid-template-rows:repeat(var(--flow-rows,1),minmax(0,1fr))}
+#app.tfDash .tfDash-flow>.hcFlow{flex:1;min-height:0;contain:size;display:grid;gap:10px;grid-template-columns:repeat(var(--flow-cols,2),var(--flow-col,minmax(0,1fr)));grid-template-rows:repeat(var(--flow-rows,1),var(--flow-rh,minmax(0,1fr)));align-content:space-between}
 #app.tfDash .tfDash-flow.hcFlowScroll>.hcFlow{overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none}
 #app.tfDash .tfDash-flow.hcFlowScroll>.hcFlow::-webkit-scrollbar{display:none}
 #app.tfDash .tfDash-flow.hcFlowScroll>.hcFlow>.tfRoomTile{scroll-snap-align:start}
@@ -1459,3 +1459,7 @@ button.tfAreaIcon{cursor:pointer}
 .hcAccPicks[hidden],.hcAccPick[hidden]{display:none}
 .hcAccPick{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;padding:0;border:0;background:none;color:var(--text);cursor:pointer}
 .hcAccPick>.tfIcon{background:var(--hc-icon-soft);color:var(--text)}
+/* One card · compact's Height in its ⋯: Free, and how it's sized (Matt, 24 Nov) */
+.tfBoardMenu .hcFreeTabs{display:flex;align-items:center}
+.tfBoardMenu .hcFreeTabs button{cursor:default}
+.tfBoardMenu .hcFreeHint{padding:0 10px;color:var(--muted);font:400 14px/20px var(--font);white-space:nowrap}

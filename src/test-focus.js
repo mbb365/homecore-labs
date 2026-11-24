@@ -1895,10 +1895,17 @@ export function mountTestFocus(root, { config, getHass }) {
   const flowWrap = (inner) => '<section class="card tfCard tfDashCard tfDash-flow" data-tf data-k="flow" aria-label="' + esc(labTitle('flow') || 'Areas') + '">' + labHead('flow') +
     '<div class="hcFlow">' + inner + '</div></section>';
   const FLOW_GAP = 10, FLOW_SIZES = [[4, 288], [3, 212], [2, 136], [1, 60]];
-  function fitFlow(el, pegW) {
+  /* the room a card's areas have, from the size the card is going to (p), not what it measures now: a card eases to its
+     new size, so measured it was still its old one and its areas were laid out for that (the gap at the foot, Matt, 24 Nov) */
+  const roomIn = (el, box, p) => {
+    if (!p) return [box.clientWidth, box.clientHeight];
+    const cs = getComputedStyle(el), edge = (k) => parseFloat(cs['padding' + k]) + parseFloat(cs['border' + k + 'Width']);
+    return [p.w - box.offsetLeft - edge('Right'), p.h - box.offsetTop - edge('Bottom')];
+  };
+  function fitFlow(el, pegW, p) {
     const box = el.querySelector(':scope > .hcFlow'), tiles = box ? [...box.children] : [], N = tiles.length;
     if (!N) return;
-    const W = box.clientWidth, H = box.clientHeight, G = FLOW_GAP, minW = Math.min(PEG_MIN, pegW - 2 * G);
+    const [W, H] = roomIn(el, box, p), G = FLOW_GAP, minW = Math.min(PEG_MIN, pegW - 2 * G);
     const fitCols = Math.max(1, Math.floor((W + G) / (minW + G)));
     // fewest rows first: every area in view, each row as tall as the card allows (a card of tiles fills its height)
     let rows = Math.ceil(N / fitCols), rowH = (H - (rows - 1) * G) / rows, scroll = false;
@@ -1908,6 +1915,9 @@ export function mountTestFocus(root, { config, getHass }) {
     const wide = colW >= 2 * PEG + PEG_GAP - 2 * G ? 2 : 1;
     box.style.setProperty('--flow-cols', cols);
     box.style.setProperty('--flow-rows', rows);
+    // each row at its size's own height, the room left over shared out evenly between the rows (Matt, 24 Nov: "make the
+    // tiles add more space between them to fill out the card properly"), so the last row sits on the card's bottom edge
+    box.style.setProperty('--flow-rh', Math.min(rowH, FLOW_SIZES.find(([sz]) => sz === size)[1]) + 'px');
     box.style.setProperty('--flow-col', scroll ? colW + 'px' : 'minmax(0,1fr)');
     el.classList.toggle('hcFlowScroll', scroll);
     el.dataset.flowSize = size;
@@ -1965,7 +1975,7 @@ export function mountTestFocus(root, { config, getHass }) {
       box.style.setProperty('--ff-rt', 'none');
       box.style.setProperty('--ff-auto', '288px');
     } else {
-      const G = PEG_GAP, cols = Math.max(1, p.cols), W = box.clientWidth, H = box.clientHeight;
+      const G = PEG_GAP, cols = Math.max(1, p.cols), [W, H] = roomIn(el, box, p);
       let rows = Math.ceil(N / cols), rowH = (H - (rows - 1) * G) / rows, across = cols;
       if (rowH < 60) { rows = Math.max(1, Math.floor((H + G) / (60 + G))); rowH = (H - (rows - 1) * G) / rows; scroll = true; across = Math.ceil(N / rows); }
       size = (FLOW_SIZES.find(([, h]) => rowH >= h) || FLOW_SIZES[3])[0];
@@ -2046,7 +2056,7 @@ export function mountTestFocus(root, { config, getHass }) {
   const WIDTH_NAMES = ['Narrow', 'Wide', 'Really wide'];
   const SIZES = { wx: 5, areas: 5, flow: 5, flowfull: 10, favs: 5, act: 5, energy: 4, avg: 4, aq: 4, pollen: 4, radar: 4, hourly: 4, sun: 4, moon: 4, uv: 4, humidity: 4, pressure: 4, wind: 4, visibility: 4 };
   // a tile whose entity isn't in the states yet keeps its saved height (it can't be measured, and must never stop the board)
-  const mostRows = (key) => (key === 'flowfull' ? FULL_MOST : !key.includes('.') || !states[key] || (key.startsWith('light.') && wantsDac(key)) ? ROWS_MOST : Math.min(ROWS_MOST, cardControls(key).length + 1));
+  const mostRows = (key) => (key === 'flowfull' || (AREAS_LAB && key === 'flow') ? FULL_MOST : !key.includes('.') || !states[key] || (key.startsWith('light.') && wantsDac(key)) ? ROWS_MOST : Math.min(ROWS_MOST, cardControls(key).length + 1));
   const sizeOf = (key) => {
     const o = dashPrefs().opts[key] || {}, most = mostRows(key), h = Number(o.h) || (o.tall ? 5 : SIZES[key] || TILE_ROWS);
     return Math.max(1, Math.min(most, h));
@@ -2310,7 +2320,7 @@ export function mountTestFocus(root, { config, getHass }) {
       // one column wide on a board of more (not a phone's single column): the card's narrow version (Matt, 6 Nov)
       it.el.toggleAttribute('data-narrow', !phone && p.cols === 1 && n > 1);
       it.el.dataset.cols = p.cols; // how many columns it spans (a room's tile lays out by it)
-      if (it.key === 'flow') fitFlow(it.el, w);
+      if (it.key === 'flow') fitFlow(it.el, w, p);
       if (it.key === 'flowfull') fitFull(it.el, p, phone);
       if (it.key === 'areas' && AREAS_LAB && !phone) fitAccordion(it.el);
       if (it.key === 'flowfull') delete it.el.dataset.rows; // its size is its areas', not the card's (an XS card hides its title)
@@ -2712,8 +2722,12 @@ export function mountTestFocus(root, { config, getHass }) {
     menu.setAttribute('aria-label', boardName(key) + ' options');
     const tile = grid.querySelector('.tfDashTiles > [data-k="' + CSS.escape(key) + '"]'), most = mostRows(key), now = sizeOf(key);
     // its height first: XS to XL side by side, one not offered greyed out (Matt, 2 Nov)
-    const height = '<div class="tfHeight" role="group" aria-label="Height"><span class="tfHeightLabel" aria-hidden="true">Height</span><div class="tfHeightTabs">' +
+    let height = '<div class="tfHeight" role="group" aria-label="Height"><span class="tfHeightLabel" aria-hidden="true">Height</span><div class="tfHeightTabs">' +
       SIZE_NAMES.map((name, i) => '<button type="button" role="menuitemradio" aria-checked="' + (i + 1 === now) + '" aria-label="' + name + ', ' + (i + 1) + (i ? ' rows' : ' row') + '" data-board-act="h:' + (i + 1) + '"' + (i < most ? '' : ' disabled') + '>' + name + '</button>').join('') + '</div></div>';
+    // One card · compact is free (Matt, 24 Nov: "for the one card compact, it has 'free mode' so that can be indicated in
+    // the dropdown"; "Replace the sizes"): no XS to XL, its areas fit whatever it's dragged to, so its Height says so
+    if (AREAS_LAB && key === 'flow') height = '<div class="tfHeight" role="group" aria-label="Height"><span class="tfHeightLabel" aria-hidden="true">Height</span><div class="tfHeightTabs hcFreeTabs">' +
+      '<button type="button" role="menuitemradio" aria-checked="true" aria-disabled="true" tabindex="-1">Free</button><span class="hcFreeHint">Drag the edges to resize</span></div></div>';
     // then its width, for the cards that have one: narrow (a column), wide (two) or really wide (three), one the board
     // hasn't the columns for greyed out (Matt, 6 Nov: not "Card size" / "Tile size")
     // the areas have none (Matt, 11 Nov): they're as wide as they need
