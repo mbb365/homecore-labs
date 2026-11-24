@@ -1888,7 +1888,11 @@ export function mountTestFocus(root, { config, getHass }) {
      When even rows don't fit, the card scrolls sideways (a card never squeezes what it holds). Nothing opens or folds */
   let flowRows = 2, flowCols = 1; // the size the areas were last laid out at, so a redraw draws them the same
   const flowTile = (r) => roomTile(r, null, ' data-k="flow:' + esc(r.id) + '" data-rows="' + flowRows + '" data-cols="' + flowCols + '"');
-  const flowWrap = (inner) => '<section class="card tfCard tfDashCard tfDash-flow" data-tf data-k="flow" aria-label="Areas"><div class="activityHeader"><div class="activityTitle">Areas</div></div>' +
+  /* the One card's title (Matt, 24 Nov: "a toggle to turn on and off the title 'areas', and if toggled on, add a field
+     using our defined field behaviour and designs"): on to start with, "Areas" unless one's typed; set in Edit card */
+  const labTitle = (key) => { const c = cardOf(key); return c.titleOff ? null : (c.title || '').trim() || 'Areas'; };
+  const labHead = (key) => { const t = labTitle(key); return t ? '<div class="activityHeader"><div class="activityTitle" data-lab-title>' + esc(t) + '</div></div>' : ''; };
+  const flowWrap = (inner) => '<section class="card tfCard tfDashCard tfDash-flow" data-tf data-k="flow" aria-label="' + esc(labTitle('flow') || 'Areas') + '">' + labHead('flow') +
     '<div class="hcFlow">' + inner + '</div></section>';
   const FLOW_GAP = 10, FLOW_SIZES = [[4, 288], [3, 212], [2, 136], [1, 60]];
   function fitFlow(el, pegW) {
@@ -1938,7 +1942,7 @@ export function mountTestFocus(root, { config, getHass }) {
     // of its own; the card is as tall as they need, the board's width, the areas on its columns
     else if (labMode === 'onefull') {
       const size = ffSize;
-      out.push({ key: 'flowfull', wrap: (inner) => '<section class="card tfCard tfDashCard tfDash-flowfull" data-tf data-k="flowfull" aria-label="Areas"><div class="activityHeader"><div class="activityTitle">Areas</div></div>' +
+      out.push({ key: 'flowfull', wrap: (inner) => '<section class="card tfCard tfDashCard tfDash-flowfull" data-tf data-k="flowfull" aria-label="' + esc(labTitle('flowfull') || 'Areas') + '">' + labHead('flowfull') +
         '<div class="hcFlowFull">' + inner + '</div></section>', tiles: shown.map((r) => ({ key: 'room:' + r.id, html: roomTile(r, 'room:' + r.id, ' data-rows="' + size + '" data-cols="1"') })) });
     } else if (labMode === 'accordion') out.push({ key: 'areas', html: areasHtml(0) });
     else shown.forEach((r) => out.push({ key: 'dash:tile:room:' + r.id, wrap: (inner) => '<div class="tfDashTiles" data-tf data-k="dash:tile:room:' + esc(r.id) + '">' + inner + '</div>',
@@ -3053,6 +3057,7 @@ export function mountTestFocus(root, { config, getHass }) {
     weather: ['Weather', '<p>The forecast card: now, the next hours in a sentence and the week ahead. Its <strong>Now</strong> opens the Weather page.</p>'],
     energy: ['Energy today', '<p>What your home has used and made today, hour by hour, with <strong>Electricity</strong>, <strong>Solar</strong>, <strong>Gas</strong> and <strong>Water</strong> under it.</p>'],
     suggest: ['Suggested entities', '<p>Fills Favourites with devices you often use, after your own. They change as you use your home.</p>'],
+    cardTitle: ['Title', '<p>The name at the top of the card. Leave it empty to show <strong>Areas</strong>.</p>'],
     sums: ['Summaries', '<p>Each summary sums up one kind of thing across your home, like <strong>Lights</strong>: how many are on.</p><ul><li>Switch one off to hide it</li><li><strong>Drag</strong> one to change the order</li></ul>'],
   };
   const homeTray = Object.assign(document.createElement('aside'), { className: 'tfEditTray hcHomeTray' });
@@ -3348,7 +3353,7 @@ export function mountTestFocus(root, { config, getHass }) {
     const dash = dashPrefs(), { card: was, ...rest } = dash.opts[key] || {}, next = { ...(was || {}), ...patch };
     Object.keys(next).forEach((k) => { if (next[k] == null) delete next[k]; });
     saveDash({ ...dash, opts: { ...dash.opts, [key]: Object.keys(next).length ? { ...rest, card: next } : rest } });
-    if (redraw) { if (key === 'energy') units.delete('dash:energy'); refresh(); layoutBoard(); } else paintCards();
+    if (redraw) { if (key === 'energy') units.delete('dash:energy'); if (key === 'flow' || key === 'flowfull') render(); /* its title is in its wrap, which only a full draw redraws */ else { refresh(); layoutBoard(); } } else paintCards();
     drawCardEditor();
   }
   // where the tray is over the card, the board slides left until it isn't (no further than the rail)
@@ -3457,6 +3462,14 @@ export function mountTestFocus(root, { config, getHass }) {
   function cardContent(key) {
     const own = cardOf(key), off = new Set(own.hidden || []), kind = cardKind(key);
     const group = (label, body, note = '') => '<div class="hcCeGroup"><div class="sectionLabel">' + label + '</div>' + (note ? '<p class="tfTrayNote">' + note + '</p>' : '') + body + '</div>';
+    // the One card's title: a switch, and while it's on the field (Figma "Field · Titled", as on My profile: its title
+    // with an (i), then the box; empty shows Areas, its placeholder, as the (i) says)
+    if (AREAS_LAB && (key === 'flow' || key === 'flowfull')) {
+      const on = !own.titleOff;
+      return group('Title', ceLine('Show title', '<button class="switch' + (on ? ' on' : '') + '" type="button" role="switch" aria-checked="' + on + '" aria-label="Show title" data-ce-title-on></button>') +
+        (on ? '<div class="hcField hcCeField"><div class="hcFieldTitle"><label class="hcFieldName" for="hcce-title">Title</label>' + infoBtn('cardTitle') + '</div>' +
+          '<input class="hcInput" id="hcce-title" type="text" autocomplete="off" maxlength="40" placeholder="Areas" data-ce-title value="' + esc(own.title || '') + '"></div>' : ''));
+    }
     const DRAG_NOTE = 'Drag to change the order, here or on the card.';
     if (kind === 'favs') {
       const hidden = new Set(prefs.favHidden || []), stars = starred(), shown = stars.filter((id) => !hidden.has(id)).length + (suggestOn() ? 1 : 0);
@@ -3514,7 +3527,9 @@ export function mountTestFocus(root, { config, getHass }) {
   }
   function cardEditClick(t) {
     const key = cardEdit, c = cardOf(key), off = new Set(c.hidden || []), mark = [...t.attributes].find((a) => a.name.startsWith('data-ce-'));
-    if (t.dataset.ceBg) {
+    if (t.hasAttribute('data-info')) { openInfo(t); return; }
+    if (t.hasAttribute('data-ce-title-on')) setCard(key, { titleOff: c.titleOff ? null : true }, true);
+    else if (t.dataset.ceBg) {
       // Colour starts from the colour it has, so nothing changes until one's picked
       if (t.dataset.ceBg === 'colour' && !c.bg) { setCard(key, { bg: rgbHex(parseColour(getComputedStyle(faceOf(grid.querySelector(cardSel(key)))).backgroundColor).slice(0, 3)) }); try { tray.querySelector('[data-ce-colour="bg"]')?.showPicker(); } catch (_e) { /* a press on the swatch opens it */ } }
       else if (t.dataset.ceBg === 'theme') setCard(key, { bg: null });
@@ -3537,13 +3552,23 @@ export function mountTestFocus(root, { config, getHass }) {
     else if (t.hasAttribute('data-ce-suggest')) { saveFavs({ suggest: !suggestOn() }); layoutBoard(); }
     else if (t.hasAttribute('data-ce-reset')) {
       const before = prefs;
-      setCard(key, { bg: null, opacity: null, stroke: null, line: null, hidden: null, main: null, order: null }, true);
+      setCard(key, { bg: null, opacity: null, stroke: null, line: null, hidden: null, main: null, order: null, title: null, titleOff: null }, true);
       toast(boardName(key) + ' reset', undoTo(before));
     }
     // the control pressed was drawn again: focus goes back to it
     if (mark && !t.isConnected) tray.querySelector('[data-tray="cardedit"] [' + mark.name + (mark.value ? '="' + CSS.escape(mark.value) + '"' : '') + ']')?.focus({ preventScroll: true });
   }
   tray.addEventListener('input', (ev) => {
+    if (cardEdit && ev.target.hasAttribute?.('data-ce-title')) {
+      const key = cardEdit, dash = dashPrefs(), { card: was, ...rest } = dash.opts[key] || {}, next = { ...(was || {}), title: ev.target.value || undefined };
+      if (next.title == null) delete next.title;
+      saveDash({ ...dash, opts: { ...dash.opts, [key]: Object.keys(next).length ? { ...rest, card: next } : rest } });
+      const head = grid.querySelector(cardSel(key) + ' [data-lab-title]'), t = labTitle(key);
+      if (head) head.textContent = t;
+      grid.querySelector(cardSel(key))?.setAttribute('aria-label', t || 'Areas');
+      tray.querySelector('[data-ce-reset]')?.removeAttribute('disabled');
+      return;
+    }
     const k = ev.target.dataset?.ceColour;
     if (k && cardEdit) setCard(cardEdit, { [k]: ev.target.value });
   });
