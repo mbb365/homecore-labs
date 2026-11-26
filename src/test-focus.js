@@ -14,6 +14,7 @@ import { wbSmoothIcon } from './weather-bento-art.js';
 import { createCoverArt, coverKind } from './cover-art.js';
 import { cardInk, parseColour, hexRgb, rgbHex } from './look.js';
 import { M, EASE, smoothD, gridLines, drawLine, stretchTo, closeDialog, toastBody, toastIn, toaster, springStep, squash, reduced } from './motion.js';
+import { playCardsIn } from './intro.js';
 // HomeCore's icon for a Material Design one, by name (19 Nov); the demo's own inline icons use it too (demo-icons.js)
 export const HC_FROM_MDI = {
   'mdi:lightbulb': 'light', 'mdi:lamps': 'light', 'mdi:power-plug': 'plug', 'mdi:thermostat': 'thermostat', 'mdi:home-thermometer': 'thermostat',
@@ -2057,10 +2058,11 @@ export function mountTestFocus(root, { config, getHass }) {
   const dashTitle = (room = null, order = null) => {
     const name = room ? '<span class="hcTitleName"><button class="back" type="button" data-area-back aria-label="Back to Home">' + BACK + '</button>' + esc(room.name) + '</span>'
       : '<span>' + esc(getHass()?.config?.location_name || 'Home') + '</span>';
-    return '<h1 class="settingsTitle tfDashTitle" data-tf data-k="dash:title"' + (order != null ? ' style="order:' + order + '"' : '') + '>' + ((overview ? welcomeOn() : dashPrefs().welcome) ? '<span class="tfGreeting">' + esc(greeting()) + '</span>' : '') +
+    const st = [order != null ? 'order:' + order : '', headVars, room && headW ? 'width:' + headW + 'px' : ''].filter(Boolean).join(';');
+    return '<h1 class="settingsTitle tfDashTitle" data-tf data-k="dash:title"' + (st ? ' style="' + st + '"' : '') + '>' + ((overview ? welcomeOn() : dashPrefs().welcome) ? '<span class="tfGreeting">' + esc(greeting()) + '</span>' : '') +
       (overview ? '<span class="hcTitleLine">' + name + '<span class="hcHomeClock" data-wx-clock>' + esc(wxClock()) + '</span></span>' + homeWxTile() : esc(getHass()?.config?.location_name || 'Home')) + '</h1>';
   };
-  const pushSums = (out, sums, order = null) => { if (sums.length) out.push({ key: 'sums', wrap: (inner) => '<div class="tfDashBarRow" data-tf data-k="sums"' + (order != null ? ' style="order:' + order + '"' : '') + '>' + dashWrap('tfDash-bar', 'sums-bar', 'Summaries', false)(inner).replace(' data-tf', '') + '</div>', tiles: sums.map((s) => ({ key: 'sum:' + s.key, html: summaryRow(s) })) }); };
+  const pushSums = (out, sums, order = null) => { if (sums.length) out.push({ key: 'sums', wrap: (inner) => '<div class="tfDashBarRow" data-tf data-k="sums"' + (order != null ? ' style="order:' + order + (headW ? ';width:' + headW + 'px' : '') + '"' : '') + '>' + dashWrap('tfDash-bar', 'sums-bar', 'Summaries', false)(inner).replace(' data-tf', '').replace('<section ', order != null && homeBarW ? '<section style="width:' + homeBarW + 'px" ' : '<section ') + '</div>', tiles: sums.map((s) => ({ key: 'sum:' + s.key, html: summaryRow(s) })) }); };
   function dashboard(out, sums) {
     if (AREAS_LAB && !overview) return areasLab(out);
     out.dash = true;
@@ -4410,7 +4412,7 @@ export function mountTestFocus(root, { config, getHass }) {
       '<span class="wbWx ' + kind + '" aria-hidden="true">' + art.svg + '</span></button>' +
       '<span class="hcHomeWxWords">' + esc(WX_WORDS[st.state] || st.state) + '</span>' + (t != null ? '<span class="hcHomeWxTemp">' + esc(Math.round(t) + unit) + '</span>' : '') + '</span>';
   }
-  let homeBarW = 0, homeWxEnd = null;
+  let homeBarW = 0, homeWxEnd = null, headVars = '', headW = 0;
   function alignHomeClock() {
     const title = grid?.querySelector('.tfDashTitle'), bar = grid?.querySelector('.tfDashBarRow > *');
     if (!overview || !title || !bar) return;
@@ -4424,6 +4426,7 @@ export function mountTestFocus(root, { config, getHass }) {
     // the weather tile just above the time and date
     const clock = title.querySelector('.hcHomeClock');
     if (clock) title.style.setProperty('--wx-above', Math.round(title.getBoundingClientRect().bottom - clock.getBoundingClientRect().top + 8) + 'px');
+    headW = grid.clientWidth;
     // …and clear of the page's pencil, which sits up there too
     const wx = title.querySelector('.hcHomeWx'), pen = $('dashEditNav')?.getBoundingClientRect();
     if (wx) {
@@ -4433,6 +4436,8 @@ export function mountTestFocus(root, { config, getHass }) {
       if (!app.classList.contains('hcAreaHome')) homeWxEnd = Math.round(hits ? Math.max(end, right - pen.left + 12) : end);
       title.style.setProperty('--wx-end', (app.classList.contains('hcAreaHome') && homeWxEnd != null ? homeWxEnd : Math.round(hits ? Math.max(end, right - pen.left + 12) : end)) + 'px');
     }
+    // remembered, so a head drawn anew (Home ⇄ an area) starts where this one is, with no jump (Matt, 26 Nov)
+    headVars = ['--sums-end', '--wx-above', '--wx-end'].map((k) => title.style.getPropertyValue(k) ? k + ':' + title.style.getPropertyValue(k) : '').filter(Boolean).join(';');
   }
   const areaHead = (x, order) => '<div class="settingsHeader tfAreaHead" data-tf data-k="areahead" style="order:' + order + '">' +
     '<button class="back" type="button" data-area-back aria-label="Back to the house">' + BACK + '</button><div class="settingsTitle">' + esc(x.name) + '</div>' +
@@ -4447,17 +4452,21 @@ export function mountTestFocus(root, { config, getHass }) {
   const openerOf = (key) => (key === 'weather' ? dashBoxes.wx : (key.startsWith('room:') && grid.querySelector('.tfRoomTile[data-k="' + CSS.escape(key) + '"]')) || grid.querySelector('.tfAreas'));
   /* between Home and an area's page, only what's under the head changes, and gently (Matt, 26 Nov: "I want stuff to
      gently fade in and out"): it fades out, the page is drawn, and the new content fades in */
-  function swapFade(go) {
+  // (Matt, 26 Nov: "a swift ease out and in, soft focus and move"): what's leaving softens out of focus and slips away,
+  // what's coming rises into focus; opening a room it all moves up, back to Home down
+  // while Home and an area swap, the page keeps its scroll: the head stays exactly where it is (Matt, 26 Nov: "the areas jump a
+  // tiny bit down"; the page was going to the top, then back scrolling to chase a card that was still rising in)
+  let swapping = false;
+  function swapFade(go, dir = 1) {
     if (!overview || reduced()) { go(); return; }
-    app.classList.remove('hcSwapIn');
+    app.style.setProperty('--swap-dir', dir);
     app.classList.add('hcSwapOut');
     setTimeout(() => {
-      go();
+      swapping = true; go(); swapping = false;
       app.classList.remove('hcSwapOut');
-      void app.offsetWidth;
-      app.classList.add('hcSwapIn');
-      setTimeout(() => app.classList.remove('hcSwapIn'), 420);
-    }, 170);
+      // the new page's cards come up as in the load-in, without its sky (Matt, 26 Nov)
+      playCardsIn(app, grid.querySelectorAll(':scope>:not(.tfDashTitle,.tfDashBarRow,.tfDashTiles,.tfBoardHidden), :scope>.tfDashTiles>:not(.tfBoardHidden)'));
+    }, 160);
   }
   function openArea(key) {
     if (overview && key.startsWith('room:') && !areaPage) { swapFade(() => openAreaNow(key)); return; }
@@ -4467,8 +4476,10 @@ export function mountTestFocus(root, { config, getHass }) {
     if (!areaPage) { leftAt = scroller().scrollTop; leftTop = openerOf(key)?.getBoundingClientRect().top ?? null; }
     areaPage = key;
     if (key.startsWith('room:')) activeArea = key.slice(5);
+    const keep = scroller().scrollTop;
     render();
-    scroller().scrollTop = 0;
+    scroller().scrollTop = swapping ? keep : 0;
+    if (swapping) { const t0 = performance.now(); [0, 60, 150].forEach((t) => setTimeout(() => { if (areaPage === key && performance.now() - t0 < 400) scroller().scrollTop = keep; }, t)); } // once the page has its height (never late)
     grid.querySelector('[data-area-back]')?.focus({ preventScroll: true });
   }
   // back on the house, the card you left from stays where it was on screen while the rest finishes drawing (1.5 s, or
@@ -4490,16 +4501,17 @@ export function mountTestFocus(root, { config, getHass }) {
     fix();
   }
   function closeArea() {
-    if (overview && areaPage?.startsWith('room:')) { swapFade(closeAreaNow); return; }
+    if (overview && areaPage?.startsWith('room:')) { swapFade(closeAreaNow, -1); return; }
     closeAreaNow();
   }
   function closeAreaNow() {
     aceArea = null; acePick = null;
     const key = areaPage;
     areaPage = null;
+    const keep = scroller().scrollTop;
     render();
-    scroller().scrollTop = leftAt;
-    holdPlace(() => openerOf(key), leftTop);
+    if (swapping) { scroller().scrollTop = keep; const t0 = performance.now(); [0, 60, 150, 300].forEach((t) => setTimeout(() => { if (!areaPage && performance.now() - t0 < 500) scroller().scrollTop = keep; }, t)); }
+    else { scroller().scrollTop = leftAt; holdPlace(() => openerOf(key), leftTop); }
     const panel = key.startsWith('room:') ? grid.querySelector('.tfRoomTile[data-k="' + CSS.escape(key) + '"]') || grid.querySelector('.tfAreaPanel[data-area="' + CSS.escape(key.slice(5)) + '"]')
       : key === 'weather' ? dashBoxes.wx.querySelector('.wbOpenPage') : grid.querySelector('[data-k="sum:' + CSS.escape(key) + '"]');
     (panel?.querySelector('[data-go]') || panel)?.focus({ preventScroll: true });

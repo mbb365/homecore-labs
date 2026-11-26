@@ -1651,9 +1651,9 @@ button.tfAreaIcon{cursor:pointer}
 #app.hcIntro:not(.hcIntroGo) .tfDashTitle .hcHomeWxIcon{opacity:0}
 #app.hcIntroGo .tfDashTitle .hcHomeWxIcon{animation:hcIntroCard var(--intro-card-dur,.5s) var(--intro-card-ease,ease) 650ms both}
 /* the content's fade between Home and an area (the head stays) */
-#app.hcSwapOut #homeView .grid>:not(.tfDashTitle,.tfDashBarRow){opacity:0;transition:opacity .17s ease}
-#app.hcSwapIn #homeView .grid>:not(.tfDashTitle,.tfDashBarRow){animation:hcSwapIn .4s ease both}
-@keyframes hcSwapIn{from{opacity:0}to{opacity:1}}
+#app.hcSwapOut #homeView :is(.grid>:not(.tfDashTitle,.tfDashBarRow,.tfDashTiles),.grid>.tfDashTiles>*){opacity:0;filter:blur(6px);transition:opacity .16s cubic-bezier(.4,0,1,1),filter .16s cubic-bezier(.4,0,1,1)}
+/* the new page's cards come up as in the load-in (intro.js playCardsIn) */
+#app #homeView .hcCardIn{animation:hcIntroCard var(--intro-card-dur,.5s) var(--intro-card-ease,ease) var(--intro-d,0ms) both}
 
 /* Home with no strokes on its cards (Matt, 26 Nov: "remove the stroke on all the cards here"); edit mode keeps its outlines */
 #app.tfOverview:not(.tfEditing) #homeView :is(.card,.tfAction,.tfRoomTile,.tfDashCard,.wbCard){box-shadow:none!important;outline:none!important;border-color:transparent!important}

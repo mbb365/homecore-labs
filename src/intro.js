@@ -127,3 +127,34 @@ export function playIntro(root, app, c = INTRO) {
   timers.push(setTimeout(start, 1200)); // whatever happens, it doesn't stay hidden
 }
 export const mountIntro = (root, app) => playIntro(root, app);
+
+/* moving between Home and an area's page (Matt, 26 Nov: "more like the first loading animation, but without the background
+   change"): the new page's cards fade up in turn and their names spin in, as the load-in does, straight away and with no
+   sky; the head (the greeting, the name, the time and date, the summaries) stays as it is */
+let stopCards = null;
+export function playCardsIn(app, cards, c = INTRO) {
+  stopCards?.();
+  if (reduced() || !cards.length) return;
+  const v = { '--intro-card-dur': c.cardDur + 'ms', '--intro-rise': c.cardRise + 'px', '--intro-scale': c.cardScale / 100, '--intro-card-ease': EASES[c.cardEase],
+    '--intro-letter-dur': c.letterDur + 'ms', '--intro-letter-ease': EASES[c.letterEase], '--intro-lrise': c.letterRise / 100 + 'em',
+    '--intro-rx': c.letterAxis === 'X' ? c.letterTurn + 'deg' : '0deg', '--intro-ry': c.letterAxis === 'Y' ? c.letterTurn + 'deg' : '0deg' };
+  Object.entries(v).forEach(([k, x]) => app.style.setProperty(k, x));
+  const timers = [], undo = [], jobs = [];
+  const textsOf = (el) => { const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), out = []; for (let n = w.nextNode(); n; n = w.nextNode()) if (n.nodeValue.trim()) out.push(n); return out; };
+  const at = (el) => el.getBoundingClientRect();
+  const list = [...cards].filter((el) => at(el).width && at(el).bottom > 0 && at(el).top < innerHeight).sort((a, b) => at(a).top - at(b).top || at(a).left - at(b).left);
+  list.forEach((el, i) => { el.style.setProperty('--intro-d', Math.round(Math.min(i * c.cardStagger * 0.5, c.cardSpread)) + 'ms'); el.classList.add('hcCardIn'); });
+  list.forEach((card) => card.querySelectorAll(NAMES).forEach((el) => {
+    if (el.closest('.hcIntroWord')) return;
+    let k = 0; const from = (parseInt(card.style.getPropertyValue('--intro-d'), 10) || 0) + Math.round(c.letterAfter * 0.5);
+    textsOf(el).forEach((n) => jobs.push({ n, delays: [...n.nodeValue].map(() => Math.round(from + Math.min(k++ * c.letterStagger, c.letterSpread))) }));
+  }));
+  const rng = document.createRange();
+  jobs.forEach((j) => { const len = j.n.nodeValue.length; j.at = []; for (let i = 0; i <= len; i++) { if (i < len) { rng.setStart(j.n, i); rng.setEnd(j.n, i + 1); const b = rng.getBoundingClientRect(); j.at.push({ x: b.left, y: b.top }); } else { rng.setStart(j.n, len - 1); rng.setEnd(j.n, len); const b = rng.getBoundingClientRect(); j.at.push({ x: b.right, y: b.top }); } } });
+  jobs.forEach((j) => { j.wrap = document.createElement('span'); j.wrap.className = 'hcIntroWord'; j.letters = [...j.n.nodeValue].map((ch) => { const l = document.createElement('span'); l.className = 'hcIntroSplit'; l.textContent = ch; j.wrap.appendChild(l); return l; }); j.n.replaceWith(j.wrap); const { n, wrap } = j; undo.push(() => { if (wrap.isConnected) wrap.replaceWith(document.createTextNode(n.nodeValue)); }); });
+  jobs.forEach((j) => { j.w = j.letters.map((l) => l.getBoundingClientRect().width); });
+  jobs.forEach((j) => j.letters.forEach((l, i) => { const a = j.at[i], b = j.at[i + 1]; if (Math.abs(b.y - a.y) < 2) l.style.marginRight = (b.x - a.x - j.w[i]).toFixed(2) + 'px'; l.className = 'hcIntroLetter'; l.style.animationDelay = j.delays[i] + 'ms'; }));
+  const end = () => { timers.forEach(clearTimeout); undo.forEach((f) => f()); list.forEach((el) => { el.classList.remove('hcCardIn'); el.style.removeProperty('--intro-d'); }); stopCards = null; };
+  stopCards = end;
+  timers.push(setTimeout(end, c.cardSpread + c.cardDur + c.letterDur + 200));
+}
