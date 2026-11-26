@@ -495,3 +495,31 @@
 .hcLookGrads{display:flex;align-items:center;gap:8px}
 .hcLookGrad{width:32px;height:32px;padding:0;border:0;border-radius:50%;box-shadow:inset 0 0 0 1px var(--line);cursor:pointer}
 .hcLookGrad[aria-pressed="true"]{outline:2px solid var(--primary);outline-offset:2px}
+
+/* ---- Home's side menu hidden behind a faint glossy bar (Matt, 26 Nov: "a giant blue glossy bar thing that's kind of faded
+   out… when you go towards [it] with your mouse, the menu appears… 4 seconds later, it fades back"; the page "40 pixels
+   down and another like 80 to the left" while it's hidden) ---- */
+.hcRailHint,.hcRailZone{display:none}
+#app.hcRailAuto .hcRail{transition:opacity .45s cubic-bezier(.2,0,0,1),translate .45s cubic-bezier(.2,0,0,1)}
+#app.hcRailAuto:not(.hcRailOpen) .hcRail{opacity:0;translate:-14px 0;pointer-events:none}
+#app.hcRailAuto .hcRailZone{display:block;position:fixed;z-index:88;left:0;top:0;bottom:0;width:96px}
+#app.hcRailAuto .hcRailHint{display:block;position:fixed;z-index:89;left:3px;top:6px;bottom:6px;height:auto;width:16px;filter:blur(2.5px);border-radius:99px;pointer-events:none;
+  background:linear-gradient(180deg,#9be0ff 0%,#18bcf2 38%,#0b86d8 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -2px 4px rgba(0,40,90,.35),0 0 22px rgba(24,188,242,.45);
+  opacity:.28;transition:opacity .45s ease,translate .45s cubic-bezier(.2,0,0,1)} /* the whole height, in the corner; feathered, so a touch stronger to still be seen (26 Nov) */
+#app.hcRailAuto .hcRailHint::after{content:"";position:absolute;top:6px;bottom:30%;left:2px;width:3px;border-radius:99px;background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(255,255,255,0))}
+#app.hcRailAuto.hcRailOpen .hcRailHint{opacity:0;translate:-8px 0}
+#app.hcRailAuto #homeView{transition:translate .6s cubic-bezier(.2,0,0,1)}
+#app.hcRailAuto:not(.hcRailOpen) #homeView{translate:var(--rail-x,-80px) 16px} /* 40 down sat too low (Matt, 26 Nov: "move it up a bit") */
+@media (max-width:900px){#app.hcRailAuto .hcRailHint,#app.hcRailAuto .hcRailZone{display:none}#app.hcRailAuto:not(.hcRailOpen) #homeView{translate:none}}
+@media (prefers-reduced-motion:reduce){#app.hcRailAuto #homeView,#app.hcRailAuto .hcRail{transition:none}}
+/* the Dock's magnifying: each icon grows smoothly, the one being pointed at white */
+#app.hcRailAuto .hcRail .hcRailBtn{transition:scale .14s ease-out,color .15s ease}
+#app.hcRailAuto .hcRail .hcRailBtn:hover{color:#fff}
+/* Home's menu beside the rail's Home (the leadership demo's, 26 Nov): Edit overview dashboard; the top-right pencil goes on
+   the larger screens (a phone, with no hover, keeps it). While editing, the pencil is the tray's Done, as before */
+.hcHomeMenu{position:fixed;z-index:400;display:grid;min-width:240px;box-shadow:var(--hc-hair-all),0 10px 30px rgba(0,0,0,.35)}
+.hcHomeMenu[hidden]{display:none}
+@media (min-width:621px){#app:not(.tfEditing):not(.hcHomeEditing) #dashEditNav{display:none!important}}
+/* the bar a little fatter, its edges feathered into the page (Matt, 26 Nov: "a bit fatter… feather the edge of it") */
+#app.hcRailAuto .hcRailHint{-webkit-mask-image:linear-gradient(180deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(180deg,transparent,#000 8%,#000 92%,transparent)}
+#app.hcRailAuto .hcRailHint::after{left:4px;width:4px}

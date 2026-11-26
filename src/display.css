@@ -1531,7 +1531,6 @@ button.tfAreaIcon{cursor:pointer}
   /* the forecast and the week as one long card (Matt, 26 Nov: "one big long card together with the forecast… the next
      days' title… in that gap between the other cards"): the week's title sits up in the gap between the widget rows,
      its days starting with the next row */
-  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbItem[data-card="days"]{margin-top:-36px}
 }
 /* and its days and its condition: no fill either, the days lit only when pointed at */
 #app.tfWeatherOpen .wbAmbient .wbItem[data-card="current"] :is(.wbColumn,.wbCondition){background:transparent}
@@ -1677,3 +1676,35 @@ button.tfAreaIcon{cursor:pointer}
 
 /* the Areas lab's test-page note under its title */
 #app .tfDashTitle .hcLabNote{display:block;width:max-content;max-width:100%;margin-top:12px;letter-spacing:0;white-space:normal}
+
+/* Next 7 days stood up, in the first row beside the forecast; Sun, Moon and UV index under the forecast (Matt, 26 Nov) */
+@media (min-width:900px){
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbRest>.wbItem[data-card="days"]{grid-column:1/span min(3,calc(var(--peg-n) - 2));grid-row:span 5}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbLeft>.wbGroup[data-group="sky"]{grid-column:1;grid-row:span 10;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbLeft>.wbGroup[data-group="sky"]>.wbItem[data-card="uv_index"]{grid-column:span 2}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbLeft>.wbGroup[data-group="sky"]>.wbItem+.wbItem{box-shadow:none}
+}
+#app .wbDaysUp{display:flex;flex-direction:column;height:100%;box-sizing:border-box}
+#app .wbDayCols{flex:1;min-height:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;padding:4px 10px 0}
+#app .wbDayCol{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0}
+#app .wbDayCol .wbDay{color:var(--text);font:500 14px/20px var(--font-tile)}
+#app .wbUpTrack{position:relative;flex:1;min-height:120px;width:46px;border-radius:16px;background:var(--tile);overflow:hidden} /* a slider's thickness and corners (.tfBar: 46, 16) */
+#app .wbUpRange{position:absolute;left:0;right:0}
+#app .wbUpFill{position:absolute;inset:0;border-radius:16px}
+#app .wbUpHi,#app .wbUpLo{white-space:nowrap;font:400 15px/20px var(--font-tile);font-variant-numeric:tabular-nums}
+#app .wbUpHi{color:var(--text)}
+#app .wbUpLo{color:var(--muted)}
+#app .wbUpNow{position:absolute;left:50%;width:12px;height:12px;margin:0 0 -6px -6px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px color-mix(in srgb,var(--text) 25%,transparent)}
+/* up among the widgets, it has their soft card */
+#app.tfWeatherOpen .wbAmbient .wbRest>.wbItem[data-card="days"] .wbCard{background:color-mix(in srgb,var(--card) 38%,transparent);box-shadow:none;border-radius:var(--r-card)}
+
+/* the Weather page's widgets apart again, each its own soft card, their groups kept side by side; a group a row, so the page
+   runs down (Matt, 26 Nov: "split up the widgets again so they're more separate… you scroll down more") */
+@media (min-width:900px){
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbGroup{column-gap:16px;row-gap:16px;background:transparent!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;overflow:visible;border-radius:0}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbGroup>.wbItem+.wbItem{box-shadow:none}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbGroup>.wbItem .wbCard{background:color-mix(in srgb,var(--card) 38%,transparent)!important;border-radius:var(--r-card)!important}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbRest>.wbGroup{grid-column:1/span min(var(--g),calc(var(--peg-n) - 2))}
+  /* Conditions as tall as the other groups, so it sits level with UV index beside it (Matt, 26 Nov) */
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbRest>.wbGroup[data-group="conditions"]{grid-row:span 5}
+}

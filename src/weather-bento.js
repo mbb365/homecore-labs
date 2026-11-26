@@ -470,6 +470,10 @@ export function mountWeatherBento(container,{getHass,entityId,style='bitmap',mot
     });
     Object.values(items).forEach(it=>{if(it.el.parentNode===rest&&!order.includes(it.el))order.push(it.el)});
     rest.append(...order.filter(Boolean));
+    // Next 7 days up where Sun, Moon and UV index were, and they down under the forecast in its place (Matt, 26 Nov)
+    const sky=rest.querySelector('[data-group="sky"]');
+    if(items.days){rest.prepend(items.days.el)}
+    if(sky)left.appendChild(sky);
   }
 
   let destroyed=false,lastKey=null,raf=0,lastStep=-1,queued=false,focusAfter=null,popWas='';
@@ -1250,8 +1254,32 @@ export function mountWeatherBento(container,{getHass,entityId,style='bitmap',mot
   // titled for how many days it holds: Next 7 days (Matt, 26 Nov)
   const renderDays=(h,src)=>{
     const n=Math.min(7,forecast('daily').filter(e=>num(e.templow)&&num(e.temperature)).length);
-    return renderBars(h,src,'<div class="wbHeader"><h2 class="wbTitle">'+esc('Next '+n+' days')+'</h2></div>');
+    const head='<div class="wbHeader"><h2 class="wbTitle">'+esc('Next '+n+' days')+'</h2></div>';
+    return ambient?renderDaysUp(h,src,head):renderBars(h,src,head);
   };
+  /* Next 7 days stood up (Matt, 26 Nov: "represented vertically… the low at the bottom and the high at the top… the today,
+     tomorrow… along the top, much in the same way as… the little tiles"): a column a day, its name and sky at the top as
+     the forecast's day tiles have them, then its range on one scale for the week, low to high going up, coloured by
+     temperature, the high over it and the low under it; now's a dot on today's */
+  function renderDaysUp(h,src,head){
+    const list=forecast('daily').filter(e=>num(e.templow)&&num(e.temperature)).slice(0,7);
+    if(!list.length)return '';
+    const lo=Math.min(...list.map(e=>Number(e.templow))),hi=Math.max(...list.map(e=>Number(e.temperature))),span=Math.max(1,hi-lo);
+    const pct=v=>Math.max(0,Math.min(100,((v-lo)/span)*100));
+    const fahrenheit=/F/.test(weatherUnit(h,forecastState(h,'daily'),'temperature')),celsius=v=>fahrenheit?(v-32)/1.8:v;
+    const current=value(h,src,'temperature')?.value;
+    return '<div class="wbCard wbHc wbDaysUp">'+head+'<div class="wbDayCols" role="list">'+list.map((e,i)=>{
+      const d=i===0?dayName(h,e):shortName(h,e,i),today=sameDay(new Date(e.datetime),new Date()),l=Number(e.templow),t=Number(e.temperature),b=pct(l),top=pct(t);
+      return '<div class="wbDayCol" role="listitem" aria-label="'+esc(fill(T.rangeRow,{day:dayName(h,e),low:deg(h,l),high:deg(h,t)}))+'">'+
+        // the high over the bar and the low under it, where they always sit (Matt, 26 Nov); the bar as thick as a slider; no
+        // sky icons ("remove the icons from the days too")
+        '<span class="wbDay">'+esc(d)+'</span><span class="wbUpHi">'+esc(deg(h,t))+'</span>'+
+        '<span class="wbUpTrack"><span class="wbUpRange" style="bottom:'+b.toFixed(2)+'%;top:'+(100-top).toFixed(2)+'%">'+
+          '<i class="wbUpFill" style="background:linear-gradient(0deg,'+tempColour(celsius(l))+','+tempColour(celsius(t))+')"></i>'+
+          (today&&num(current)?'<i class="wbUpNow" style="bottom:'+(((Number(current)-l)/Math.max(1,t-l))*100).toFixed(2)+'%"></i>':'')+'</span></span>'+
+        '<span class="wbUpLo">'+esc(deg(h,l))+'</span></div>';
+    }).join('')+'</div></div>';
+  }
   const RENDER={current:renderCurrent,hourly:renderHourly,days:renderDays,sun:renderSun,moon:renderMoon,wind:renderWind,uv_index:renderUv,
     compared_to_average:renderCompared,humidity:renderHumidity,pressure:renderPressure,precipitation:renderPrecipitation,visibility:renderVisibility,air_quality:renderAirQuality,
     aq_tile:renderAqTile,pollen_tile:renderPollenTile,radar_tile:renderRadarTile};

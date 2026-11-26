@@ -52,7 +52,9 @@ export function mountDemoShell(root, { getHass, homecore }) {
   const railBtn = ([k, name, ic]) => '<button class="hcRailBtn" type="button" data-hc-go="' + k + '" data-tip="' + name + '" aria-label="' + name + '">' + icon(ic) + '</button>';
   shell.insertAdjacentHTML('afterbegin',
     '<nav class="hcRail" aria-label="Main">' +
-      '<button class="hcRailBtn hcLogo" type="button" data-hc-go="home" data-tip="Home" aria-label="Home">' + HA_LOGO + '</button>' +
+      '<button class="hcRailBtn hcLogo" type="button" data-hc-go="home" data-tip="Home" aria-label="Home" aria-haspopup="menu" aria-expanded="false">' + HA_LOGO + '</button>' +
+      // a short hover on Home offers to edit the overview (Matt, 26 Nov: "accessed from the home icon, after a short hover")
+      '<div class="card hcHomeMenu" role="menu" aria-label="Home" hidden><button class="hcRow hcNavRow" type="button" role="menuitem" data-hc-edit-home><span class="hcNavIcon">' + icon('mdi:pencil') + '</span><span class="hcRowText"><span class="hcRowName">Edit overview dashboard</span></span></button></div>' +
       '<button class="hcRailBtn" type="button" data-hc-search data-tip="Search" aria-label="Search">' + icon('mdi:magnify') + '</button>' +
       '<div class="hcRailMain">' + RAIL.map(railBtn).join('') +
         '<button class="hcRailBtn" type="button" data-hc-more data-tip="More" aria-label="More" aria-haspopup="menu" aria-expanded="false">' + icon('mdi:dots-horizontal') + '</button>' +
@@ -98,6 +100,62 @@ export function mountDemoShell(root, { getHass, homecore }) {
   };
   const hideTip = () => { clearTimeout(tipTimer); if (!tip.hidden) tipGone = performance.now(); tip.hidden = true; };
   const rail = shell.querySelector('.hcRail');
+  /* Home's side menu (Matt, 26 Nov): hidden, a faint glossy blue bar down the left in its place; going towards it brings the
+     menu back, and leaving it, it fades away again 4 s later. Home's cards sit 80 further left and 40 lower while it's
+     hidden, and slide back as it comes out */
+  shell.insertAdjacentHTML('beforeend', '<div class="hcRailZone" aria-hidden="true"></div><div class="hcRailHint" aria-hidden="true"></div>');
+  const railZone = shell.querySelector('.hcRailZone');
+  let railTimer = 0;
+  const railOpen = () => { clearTimeout(railTimer); app.classList.add('hcRailOpen'); };
+  const railLater = () => { clearTimeout(railTimer); railTimer = setTimeout(() => { if (!rail.matches(':hover,:focus-within') && !railZone.matches(':hover')) app.classList.remove('hcRailOpen'); }, 4000); };
+  [railZone, rail].forEach((el) => { el.addEventListener('pointerenter', railOpen); el.addEventListener('pointerleave', railLater); });
+  rail.addEventListener('focusin', railOpen);
+  rail.addEventListener('focusout', railLater);
+  /* the menu magnifies like the Mac's Dock (Matt, 26 Nov: "the genie effect, like on the bottom bar"): each icon grows as the
+     pointer nears it, the one under it most and white */
+  const railBtns = () => [...rail.querySelectorAll('.hcRailBtn')];
+  rail.addEventListener('pointermove', (ev) => {
+    if (ev.pointerType === 'touch' || !app.classList.contains('hcRailAuto')) return;
+    railBtns().forEach((b) => { const r = b.getBoundingClientRect(), d = Math.abs(ev.clientY - (r.top + r.height / 2)); b.style.scale = (1 + 0.38 * Math.max(0, 1 - d / 110)).toFixed(3); });
+  });
+  rail.addEventListener('pointerleave', () => railBtns().forEach((b) => { b.style.scale = ''; }));
+  /* with the menu hidden, Home's content sits in the middle of the window (Matt, 26 Nov: "just center everything"), and 40
+     lower; measured from what's on the page (its cards and summaries, not the title's full width) */
+  const centreHome = () => {
+    if (!app.classList.contains('hcRailAuto')) return;
+    // measured where the page would be without its shift (the shift as it is this moment, even mid-slide), so the
+    // centring never feeds on itself (Matt, 26 Nov: "the content keeps jumping forward to the right… resetting")
+    const hv = root.getElementById('homeView'), now = parseFloat(String(getComputedStyle(hv).translate).split(' ')[0]) || 0;
+    const items = [...hv.querySelectorAll('.tfBoardItem:not(.tfBoardHidden):not(.tfDashTitle), .hcAreaHome .grid>:not(.tfDashTitle)')].map((el) => el.getBoundingClientRect()).filter((r) => r.width);
+    if (!items.length) return;
+    const left = Math.min(...items.map((r) => r.left)) - now, right = Math.max(...items.map((r) => r.right)) - now;
+    const x = Math.round((innerWidth - (right - left)) / 2 - left);
+    if (Math.abs(x - (parseFloat(app.style.getPropertyValue('--rail-x')) || 0)) > 1) app.style.setProperty('--rail-x', x + 'px');
+  };
+  addEventListener('resize', () => setTimeout(centreHome, 120));
+  [300, 1200].forEach((t) => setTimeout(centreHome, t));
+  // Home's menu: after a short hover on Home (or Home focused from the keyboard) it shows beside it, Edit overview dashboard
+  // in it; it stays while the pointer is on Home or the menu, and goes a moment after it leaves both
+  const homeBtn = rail.querySelector('.hcLogo'), homeMenu = rail.querySelector('.hcHomeMenu');
+  let homeIn = 0, homeOut = 0;
+  const placeHomeMenu = () => { const r = homeBtn.getBoundingClientRect(); homeMenu.style.left = r.right + 8 + 'px'; homeMenu.style.top = r.top + 'px'; };
+  const openHomeMenu = () => { clearTimeout(homeOut); hideTip(); placeHomeMenu(); homeMenu.hidden = false; homeBtn.setAttribute('aria-expanded', 'true'); };
+  const closeHomeMenu = () => { clearTimeout(homeIn); homeMenu.hidden = true; homeBtn.setAttribute('aria-expanded', 'false'); };
+  const leaveHome = () => { clearTimeout(homeIn); clearTimeout(homeOut); homeOut = setTimeout(closeHomeMenu, 250); };
+  homeBtn.addEventListener('pointerenter', (ev) => { if (ev.pointerType === 'touch') return; clearTimeout(homeOut); clearTimeout(homeIn); homeIn = setTimeout(openHomeMenu, 450); });
+  homeBtn.addEventListener('pointerleave', leaveHome);
+  homeMenu.addEventListener('pointerenter', () => clearTimeout(homeOut));
+  homeMenu.addEventListener('pointerleave', leaveHome);
+  homeBtn.addEventListener('focus', () => { if (homeBtn.matches(':focus-visible')) openHomeMenu(); });
+  rail.addEventListener('focusout', (ev) => { if (!homeMenu.hidden && !(ev.relatedTarget === homeBtn || homeMenu.contains(ev.relatedTarget))) leaveHome(); });
+  homeMenu.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); closeHomeMenu(); homeBtn.focus(); } });
+  homeMenu.querySelector('[data-hc-edit-home]').addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    closeHomeMenu();
+    // on Home first (from anywhere), then its editing, as the pencil did
+    const edit = () => { const pen = $('dashEditNav'); if (pen && !app.classList.contains('tfEditing')) pen.click(); };
+    if (where() !== 'home') { homeBtn.click(); setTimeout(edit, 80); } else edit();
+  });
   rail.addEventListener('pointerover', (ev) => { const el = ev.pointerType !== 'touch' && ev.target.closest('[data-tip]'); if (el) showTip(el); else hideTip(); });
   rail.addEventListener('pointerleave', hideTip);
   rail.addEventListener('focusin', (ev) => { const el = ev.target.closest('[data-tip]'); if (el?.matches(':focus-visible')) showTip(el); });
@@ -198,6 +256,10 @@ export function mountDemoShell(root, { getHass, homecore }) {
       if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
     drawer.querySelectorAll('[data-hc-go]').forEach((b) => b.classList.toggle('active', b.dataset.hcGo === (open === 'about' ? 'config' : open)));
+    // on Home the side menu hides behind a faint bar (Matt, 26 Nov)
+    const auto = open === 'home';
+    if (auto !== app.classList.contains('hcRailAuto')) { app.classList.toggle('hcRailAuto', auto); if (!auto) app.classList.remove('hcRailOpen'); }
+    if (auto) setTimeout(() => centreHome?.(), 250);
     more.querySelectorAll('[data-hc-go]').forEach((b) => b.classList.toggle('active', b.dataset.hcGo === open));
     const hash = open === 'home' ? '' : '#/' + open;
     if ((location.hash || '') !== hash) history.replaceState(null, '', hash || location.pathname + location.search);
