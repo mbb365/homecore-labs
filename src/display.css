@@ -1336,6 +1336,7 @@ button.tfAreaIcon{cursor:pointer}
 #app.hcCardEditing #homeView .tfBoardItem{outline:none!important;cursor:default!important}
 #app.hcCardEditing #homeView .tfDashBento .wbCard{outline:none}
 #app.hcCardEditing #homeView :is(.tfEditChips,.tfFavHides,.tfBoardCells){display:none}
+#app.hcLab.hcCardEditing #homeView .tfBoardCells{display:block} /* the lab's card is resized while its page is open */
 #app.hcCardEditing #homeView .hcCardEdited{z-index:2}
 /* the board scales down beside an open tray, from its top left, and back when the tray goes (Matt, 20 Nov) */
 #app.tfBoard #homeView>.grid{transform-origin:0 0;transition:scale .35s cubic-bezier(.2,.7,.3,1),margin-bottom .35s cubic-bezier(.2,.7,.3,1)}

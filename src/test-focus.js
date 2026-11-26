@@ -2722,6 +2722,10 @@ export function mountTestFocus(root, { config, getHass }) {
     if (!on) { drag = null; trayPicking = tilePicking = false; closeBoardMenu(); closeCardEditor(false); }
     layoutBoard();
     if (on) { editStart = JSON.stringify(prefs); trayPage(tray, 'Edit custom dashboard', null); } // a phone starts at the list
+    // the Areas lab's one card opens straight on its own page (Matt, 26 Nov: "it should just open up the Edit Cards
+    // part"), the dots and its edges still there behind it to resize it
+    const only = { one: 'flow', onefull: 'flowfull' }[labMode];
+    if (on && AREAS_LAB && only && grid.clientWidth >= 2 * PEG + PEG_GAP) openCardEditor(only);
     else if (editStart && JSON.stringify(prefs) !== editStart) toast('Changes saved');
     scaleBoard();
   }
