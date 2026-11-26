@@ -622,7 +622,7 @@ button.tfAreaIcon{cursor:pointer}
    80 × 40, across the card's top edge so it covers nothing in it) and ⋯ (top right); its own controls rest. Nothing
    shakes */
 /* the grid: dots, and crosshairs where the gutters cross (Matt, 10 Nov; were solid cells) */
-.tfBoardCells{position:absolute;top:0;left:0;z-index:0;pointer-events:none;color:var(--text)}
+.tfBoardCells{position:absolute;top:0;left:0;z-index:0;pointer-events:none;color:var(--text);overflow:clip;overflow-clip-margin:24px}
 .tfBoardCells svg{display:block;overflow:visible}
 .tfBoardCells pattern circle{fill:currentColor;fill-opacity:.16}
 .tfBoardCells .tfGridCross{fill:none;stroke:currentColor;stroke-opacity:.45;stroke-width:1.5;stroke-linecap:round}
@@ -1470,3 +1470,210 @@ button.tfAreaIcon{cursor:pointer}
 #app.tfDash .tfDash-flow.hcFlowStrip>.activityHeader{display:none}
 #app.tfDash .tfDash-flow.hcFlowStrip>.hcFlow{flex:none;contain:none;overflow:hidden;gap:0;grid-template-columns:repeat(var(--strip-cols,3),auto);grid-template-rows:none;grid-auto-rows:60px;justify-content:start;align-content:start}
 #app.tfDash .tfDash-flow.hcFlowStrip>.hcFlow>.tfRoomTile{min-width:200px;height:60px;padding:10px}
+
+/* ---- The ambient Weather page (Matt, 26 Nov): the page takes the weather's colours, dirty washes with grain over
+   them; the weather card and the week sit straight on it, with no card behind them; the week down the right edge of
+   the screen; the widgets in between, their cards softened so they live on the page rather than above it ---- */
+#app.tfWeatherOpen{isolation:isolate}
+.wbAmbientSky{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;
+  --s1:#ffcf7a;--s2:#8cc4ff;--s3:#ffb08a;--wx-mix:62%;background:color-mix(in oklab,var(--s2) calc(var(--wx-mix) * .5),var(--bg));transition:background 1.2s ease}
+.wbAmbientSky[data-sky="partly"]{--s1:#ffe0a0;--s2:#9db9d8;--s3:#c8d1dc}
+.wbAmbientSky[data-sky="cloudy"]{--s1:#a8b1bc;--s2:#c9c3b9;--s3:#8d97a5}
+.wbAmbientSky[data-sky="fog"]{--s1:#d8d3ca;--s2:#b8bcc1;--s3:#e8e2d6}
+.wbAmbientSky[data-sky="rain"]{--s1:#6c84a2;--s2:#93a2b2;--s3:#56667c;--wx-mix:66%}
+.wbAmbientSky[data-sky="snow"]{--s1:#dfe9f4;--s2:#b5c7dc;--s3:#f3f5f8}
+.wbAmbientSky[data-sky="storm"]{--s1:#5b4f7c;--s2:#6b7990;--s3:#3c455f;--wx-mix:70%}
+.wbAmbientSky[data-night]{--s1:#2a3a72;--s2:#3c3d74;--s3:#111a38;--wx-mix:60%}
+.wbAmbientSky[data-night][data-sky="rain"],.wbAmbientSky[data-night][data-sky="storm"]{--s1:#2b3550;--s2:#3a3553;--s3:#141a2c}
+.wbWash{position:absolute;width:75vmax;height:75vmax;border-radius:50%;filter:blur(70px);opacity:.95;will-change:transform;transition:background 1.2s ease}
+.wbWash1{left:-20vmax;top:-30vmax;background:radial-gradient(closest-side,color-mix(in oklab,var(--s1) var(--wx-mix),var(--bg)),transparent);animation:wbWashA 46s ease-in-out infinite alternate}
+.wbWash2{right:-25vmax;top:-10vmax;background:radial-gradient(closest-side,color-mix(in oklab,var(--s2) var(--wx-mix),var(--bg)),transparent);animation:wbWashB 58s ease-in-out infinite alternate}
+.wbWash3{left:10vmax;bottom:-40vmax;background:radial-gradient(closest-side,color-mix(in oklab,var(--s3) var(--wx-mix),var(--bg)),transparent);animation:wbWashC 52s ease-in-out infinite alternate}
+@keyframes wbWashA{to{transform:translate(14vmax,10vmax) scale(1.15)}}
+@keyframes wbWashB{to{transform:translate(-12vmax,14vmax) scale(.9)}}
+@keyframes wbWashC{to{transform:translate(10vmax,-12vmax) scale(1.1)}}
+/* the grain: fractal noise, a touch over the washes */
+.wbGrainLayer{position:absolute;inset:-50%;opacity:.32;mix-blend-mode:overlay;background-size:220px 220px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.4 -.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+/* wind: streaks and a few leaves across the whole page, as Pollen's seeds cross its tile */
+.wbWindAir{position:fixed;inset:0;z-index:4;overflow:hidden;pointer-events:none;color:color-mix(in srgb,var(--text) 34%,transparent)}
+.wbWindAir .wbFloat{animation-name:wbWindCross}
+.wbWindAir .wbStreak svg{width:160px;height:24px;opacity:.7}
+.wbWindAir .wbStreak.wbShort svg{width:90px;height:16px}
+.wbWindAir .wbLeaf svg{width:18px;height:18px;color:color-mix(in srgb,var(--s3) 60%,var(--text))}
+.wbWindAir .wbStreak .wbBob{animation-name:wbWindSway}
+@keyframes wbWindCross{from{left:-14%}to{left:108%}}
+@keyframes wbWindSway{from{transform:translateY(-10px)}to{transform:translateY(10px)}}
+@media (prefers-reduced-motion:reduce){.wbWash{animation:none}}
+/* the page's own ground goes, so the sky shows */
+#app.tfWeatherOpen,#app.tfWeatherOpen .shell,#app.hcDemo.tfWeatherOpen .shell,#app.tfWeatherOpen #homeView{background:transparent}
+
+/* the weather card on the page: no card behind it */
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="current"] .wbCard{background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;outline:none}
+/* the widgets: soft, see-through cards with no edge, so they sit in the page */
+#app.tfWeatherOpen .wbAmbient .wbItem:not([data-card="current"],[data-card="days"]) .wbCard{background:color-mix(in srgb,var(--card) 38%,transparent);box-shadow:none;outline:none;-webkit-backdrop-filter:blur(18px) saturate(1.05);backdrop-filter:blur(18px) saturate(1.05)}
+
+/* the forecast on the left with the week under it, Next hours beside the forecast, and the widgets after them, to
+   the right (Matt, 26 Nov: "stack the weather forecast card on top of the next days… put that next to the forecast") */
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="days"] .wbCard{background:transparent;box-shadow:none;outline:none}
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="days"] .wbRangeTrack{background:color-mix(in srgb,var(--text) 10%,transparent)}
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="days"] .wbRangeNow{box-shadow:0 0 0 2px color-mix(in srgb,var(--text) 25%,transparent)}
+/* narrower, the two columns aren't there: the cards are the page's as before */
+.wbLeft,.wbRest,.wbGroup{display:contents}
+@media (min-width:900px){
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbBento{display:flex;align-items:flex-start;gap:16px}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbLeft{flex:none;width:calc(2 * var(--peg-w) + 16px);display:grid;grid-template-columns:1fr;grid-auto-rows:60px;gap:16px}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbRest{flex:none;display:grid;grid-template-columns:repeat(calc(var(--peg-n) - 2),var(--peg-w));grid-auto-rows:60px;grid-auto-flow:row;gap:16px}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbItem[data-card="current"]{grid-column:1;grid-row:span 5}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbItem[data-card="days"]{grid-column:1;grid-row:span 7}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbItem[data-break]{grid-column-start:auto}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbItem[data-card="days"] .wbDayBars{justify-content:space-between;overflow:visible}
+  /* the forecast and the week as one long card (Matt, 26 Nov: "one big long card together with the forecast… the next
+     days' title… in that gap between the other cards"): the week's title sits up in the gap between the widget rows,
+     its days starting with the next row */
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbItem[data-card="days"]{margin-top:-36px}
+}
+/* and its days and its condition: no fill either, the days lit only when pointed at */
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="current"] :is(.wbColumn,.wbCondition){background:transparent}
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="current"] .wbColumn:hover{background:color-mix(in srgb,var(--text) 6%,transparent)}
+
+/* a group: one soft card round its widgets (Matt, 26 Nov), the widgets side by side in it with a faint line between,
+   as wide as its widgets (no wider than the columns there are) and as tall as the tallest */
+@media (min-width:900px){
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbGroup{display:grid;grid-column:span min(var(--g),calc(var(--peg-n) - 2));grid-row:span 5;grid-template-columns:repeat(var(--g),minmax(0,1fr));
+    border-radius:var(--r-card);background:color-mix(in srgb,var(--card) 38%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.05);backdrop-filter:blur(18px) saturate(1.05);overflow:hidden}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbGroup>.wbItem{grid-column:auto;grid-row:auto;min-width:0}
+  /* Next hours as wide as a group, on its own row; the groups under it, two to a row where there's room */
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbRest>.wbItem[data-card="hourly"]{grid-column:1/span min(3,calc(var(--peg-n) - 2))}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbGroup:is([data-group="sky"],[data-group="conditions"]){grid-column:1/span min(var(--g),calc(var(--peg-n) - 2))} /* two to a row at most */
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbGroup>.wbItem[data-card="compared_to_average"]{grid-column:span 2}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbGroup:is([data-group="rain"],[data-group="conditions"]){grid-row:span 6} /* Compared to average a bit taller, and the group beside it with it */
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbGroup>.wbItem .wbCard{background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;border-radius:0}
+  #app.tfWeatherOpen .tfBento.tfPegs .wbAmbient .wbGroup>.wbItem+.wbItem{box-shadow:inset .5px 0 0 color-mix(in srgb,var(--text) 12%,transparent)}
+}
+/* Next days: the icon first, the day's name small under it (Matt, 26 Nov: "Put the icon first and then the day, below
+   it"), so Tomorrow's longer name doesn't push its row's bar along */
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="days"] .wbDayBar{grid-template-columns:64px 36px minmax(0,1fr) 36px;grid-template-rows:auto auto;grid-template-areas:"icon lo track hi" "day lo track hi";row-gap:2px;align-content:center}
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="days"] .wbDayBar>.wbWx{grid-area:icon;justify-self:center;align-self:end}
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="days"] .wbRangeDay{grid-area:day;justify-self:center;align-self:start;font:500 12px/16px var(--font-tile);color:var(--muted)}
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="days"] .wbRangeLo{grid-area:lo}
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="days"] .wbRangeTrack{grid-area:track}
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="days"] .wbRangeHi{grid-area:hi}
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="days"] .wbDayBar>.wbWx{width:32px;height:32px;border-radius:11px}
+#app.tfWeatherOpen .wbAmbient .wbItem[data-card="days"] .wbDayBar{min-height:0;padding:4px 0}
+
+/* every card on Home at 75%, alike (Matt, 26 Nov: "all the cards on this page should be at like 75%, and not just the area"): their fill, not their text, the background softened behind them */
+#app.tfOverview #homeView :is(.tfDashTiles>.tfRoomTile,.tfDash-bar,.tfDash-favs,.tfDash-sched,.tfDash-wx,.tfDash-energy){background-color:color-mix(in srgb,var(--card) 75%,transparent);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+
+/* the empty dashboard's note: a HomeCore tile, pressed to open what can be added */
+#app .hcDashEmpty{width:100%;border:0;font:inherit;text-align:start;color:var(--text);cursor:pointer}
+#app .hcDashEmpty .tfIcon{display:grid;place-items:center;padding:0}
+#app .hcDashEmpty .tfIcon svg{display:block;width:24px!important;height:24px!important;margin:0;fill:currentColor}
+/* in the middle of the screen (the page's, right of the rail), as wide as its words (Matt, 26 Nov) */
+#app.tfBoard:not(.tfEditing) #homeView .hcDashEmpty.tfBoardItem{position:fixed;left:calc((100vw + var(--hc-rail,0px)) / 2)!important;top:50%!important;width:max-content!important;min-width:260px;padding-inline-end:24px;translate:-50% -50%}
+#app .hcDashEmpty:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+/* the Weather page's time and date (Matt, 26 Nov): in the middle of the page, the title's size, a thin weight */
+/* …beside the title on its line, at the top (Matt, 26 Nov: tried at the bottom of the screen, then "move the weather and
+   date and time thing back up to the top again") */
+#app.tfWeatherOpen .tfAreaHead .hcWxClock{margin:0;font-weight:300;letter-spacing:-.02em;white-space:pre;font-variant-numeric:tabular-nums}
+@media (min-width:900px){#app.tfWeatherOpen .tfAreaHead{display:flex;align-items:baseline;gap:28px}}
+@media (max-width:899px){#app.tfWeatherOpen .tfAreaHead .hcWxClock{display:none}}
+
+/* Home's time and date on the name's line (Matt, 26 Nov: "in line with the bottom of the main title"), the greeting's size in a thin weight, ending with the summaries */
+#app.tfOverview .tfDashTitle .hcTitleLine{display:flex;align-items:baseline;justify-content:space-between;gap:16px}
+#app.tfOverview .tfDashTitle .hcHomeClock{margin-inline-end:var(--sums-end,0px);font:300 20px/1.2 var(--font-tile);letter-spacing:0;white-space:pre;font-variant-numeric:tabular-nums;color:var(--text)}
+
+/* Home's weather above the time and date, its end with theirs (Matt, 26 Nov): no background, the icon (it opens the
+   Weather page), what it's doing, the temperature, in the clock's type */
+#app.tfOverview .tfDashTitle .hcHomeWx{position:absolute;right:var(--wx-end,var(--sums-end,0px));bottom:var(--wx-above,40px);display:flex;align-items:center;gap:12px;font:300 20px/24px var(--font-tile);letter-spacing:0;color:var(--text);white-space:nowrap}
+#app.tfOverview .tfDashTitle .hcHomeWxIcon{flex:none;display:block;width:40px;height:40px;border:0;padding:0;border-radius:12px;background:none;cursor:pointer}
+#app.tfOverview .tfDashTitle .hcHomeWxIcon .wbWx{width:40px;height:40px;border-radius:12px}
+#app.tfOverview .tfDashTitle .hcHomeWxIcon:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+#app.tfOverview .tfDashTitle .hcHomeWxTemp{font-variant-numeric:tabular-nums}
+/* an area card's devices stay on one line inside it: on a narrower card the chips give up a little size, never wrapping
+   out of the card's foot (Matt, 26 Nov: "the icons aren't fitting inside the area cards anymore") */
+#app .tfRoomTile .tfRoomDevices{flex-wrap:nowrap!important;min-width:0}
+#app .tfRoomTile .tfRoomDevices>.tfIcon{flex:0 1 var(--chip-size,40px);min-width:30px;width:auto;height:auto;aspect-ratio:1}
+
+/* a card's faint icon fill from the card's own words, not the page's: on a dark or dusk background the page's are white,
+   and the off chips in light cards lost their fill, leaving bare round glyphs (Matt, 26 Nov: "some of the icons [are]
+   circles and some… proper sized icon buttons") */
+#app :is(.tfAction,.card,.tfRoomTile,.wbCard,.tfMore,.tfDashCard){--hc-icon-soft:color-mix(in srgb,var(--text) 9%,transparent)}
+
+/* ---- 26 Nov, Matt's pass on the dynamic background ---- */
+/* the rail's icons keep the theme's grey whatever the background (not the page's white at dusk) */
+#app.hcDemo .hcRailBtn:not(.active){color:var(--color-text-muted,#6a625a)}
+/* a page's back button: the faint chip, as Home's weather icon, so it still reads as a button */
+#app :is(.tfAreaHead .back,#settingsBack,.settingsHeader>.back){width:40px;height:40px;border-radius:12px!important;background:color-mix(in srgb,var(--text) 10%,transparent);color:color-mix(in srgb,var(--text) 80%,transparent);box-shadow:none}
+#app :is(.tfAreaHead .back,#settingsBack,.settingsHeader>.back):hover{background:color-mix(in srgb,var(--text) 16%,transparent)}
+/* icon chips are rounded squares, never near-circles: 12 corners on the 40 (a third less round than 16) */
+#app .tfIcon,#app .tfIcon::before{border-radius:12px!important}
+/* an area card's chips closer together, so four fit at their full 40 */
+#app .tfRoomTile .tfRoomDevices{gap:8px}
+/* popups (a summary's window, more info, sheets): the card colour at 80%, frosted, the theme's words, and an edge you
+   can see (Matt, 26 Nov: "the background for it should be about 80%… a noticeable stroke") */
+#app :is(.tfMore,.tfMore.wide,.hcSumsPop,.sheet,.modal,.hcDrawerPanel){background:color-mix(in srgb,var(--color-bg-card) 80%,transparent)!important;-webkit-backdrop-filter:blur(28px) saturate(1.1)!important;backdrop-filter:blur(28px) saturate(1.1)!important;
+  --text:var(--color-text-primary)!important;--muted:var(--color-text-muted)!important;--tile:var(--color-bg-tile)!important;--hc-icon-soft:color-mix(in srgb,var(--color-text-primary) 9%,transparent)!important;color:var(--color-text-primary)!important;
+  box-shadow:0 0 0 1.5px color-mix(in srgb,var(--color-text-primary) 22%,transparent),0 24px 64px rgba(0,0,0,.22)!important}
+/* their Close and Back: squircles, a soft fill on hover */
+#app :is(.tfMore,.hcSumsPop,.sheet,.modal) .tfBack{border-radius:12px!important;overflow:hidden;transition:background .15s ease}
+#app :is(.tfMore,.hcSumsPop,.sheet,.modal) .tfBack:hover{background:var(--tile)}
+#app :is(.tfMore,.hcSumsPop,.sheet,.modal) .tfBack::before,#app :is(.tfMore,.hcSumsPop,.sheet,.modal) .tfBack::after{border-radius:inherit!important}
+/* the edit tray's cards jump and wiggle once when the empty dashboard is pressed */
+#app .tfTrayCard.hcJiggle{animation:hcJiggle .9s cubic-bezier(.3,.7,.4,1) calc(var(--jig-i,0) * 70ms) 2 both}
+@keyframes hcJiggle{0%{transform:none}18%{transform:translateY(-7px) rotate(-1.6deg)}36%{transform:translateY(0) rotate(1.4deg)}52%{transform:translateY(-3px) rotate(-1deg)}70%{transform:rotate(.6deg)}100%{transform:none}}
+/* a card just added: a ring pulses round its ⋯ */
+#app .tfEditChip.hcPulse{position:relative}
+#app .tfEditChip.hcPulse::after{content:"";position:absolute;inset:-4px;border-radius:14px;border:2px solid var(--primary,#03a9f4);pointer-events:none;animation:hcPulse 1.1s ease-out 3}
+@keyframes hcPulse{0%{opacity:.9;transform:scale(.85)}100%{opacity:0;transform:scale(1.45)}}
+@media (prefers-reduced-motion:reduce){#app .tfTrayCard.hcJiggle{animation:none}#app .tfEditChip.hcPulse::after{animation:none;opacity:.8}}
+
+/* an area's page from Home (Matt, 26 Nov): Home's head where Home has it, the whole width (the greeting, the area's name
+   with its back button, the time and date and the weather), the summaries under it; then the area's favourites and the rest */
+#app.hcAreaHome #homeView .grid>.tfDashTitle{grid-column:1/-1;position:relative;margin:0 0 16px}
+#app.hcAreaHome #homeView .grid>.tfDashBarRow{grid-column:1/-1;margin:0 0 16px}
+#app .tfDashTitle .hcTitleName{display:inline-flex;align-items:baseline;gap:14px}
+#app .tfDashTitle .hcTitleName>.back{align-self:center} /* the name keeps the line's baseline, so the time and date sit as on Home */
+#app .tfDashTitle .hcTitleName>.back{flex:none;display:grid;place-items:center;width:40px;height:40px;padding:0;border:0;border-radius:12px!important;background:transparent;color:color-mix(in srgb,var(--text) 80%,transparent);cursor:pointer}
+#app .tfDashTitle .hcTitleName>.back:hover{background:color-mix(in srgb,var(--text) 16%,transparent)}
+#app .tfDashTitle .hcTitleName>.back svg{width:24px;height:24px;fill:currentColor}
+#app.hcDemo.hcAreaHome #homeView{max-width:none}
+
+/* an area's page from Home: its cards and tiles at the sizes they're drawn (a card two columns, 520; a tile one, 252),
+   from the left, none stretched to fill (Matt, 26 Nov) */
+#app.hcAreaHome #homeView .grid{grid-template-columns:repeat(auto-fill,252px);column-gap:16px;justify-content:start}
+#app.hcAreaHome #homeView .grid>.card:not(.tfDashTitle){grid-column:span 2!important}
+#app.hcAreaHome #homeView .grid>.tfBlock{grid-column:1/-1!important}
+#app.hcAreaHome #homeView .grid>.tfBlock>.tfActions{grid-template-columns:repeat(auto-fill,252px);gap:16px;justify-content:start}
+#app.hcAreaHome #homeView .grid>.tfBlock>.tfActions>*{grid-column:auto}
+/* Home's weather icon comes in with the load-in, not before it */
+#app.hcIntro:not(.hcIntroGo) .tfDashTitle .hcHomeWxIcon{opacity:0}
+#app.hcIntroGo .tfDashTitle .hcHomeWxIcon{animation:hcIntroCard var(--intro-card-dur,.5s) var(--intro-card-ease,ease) 650ms both}
+/* the content's fade between Home and an area (the head stays) */
+#app.hcSwapOut #homeView .grid>:not(.tfDashTitle,.tfDashBarRow){opacity:0;transition:opacity .17s ease}
+#app.hcSwapIn #homeView .grid>:not(.tfDashTitle,.tfDashBarRow){animation:hcSwapIn .4s ease both}
+@keyframes hcSwapIn{from{opacity:0}to{opacity:1}}
+
+/* Home with no strokes on its cards (Matt, 26 Nov: "remove the stroke on all the cards here"); edit mode keeps its outlines */
+#app.tfOverview:not(.tfEditing) #homeView :is(.card,.tfAction,.tfRoomTile,.tfDashCard,.wbCard){box-shadow:none!important;outline:none!important;border-color:transparent!important}
+/* the summaries a solid card again with its outline, and a very soft glow behind it (Matt, 26 Nov: "bring back the solid
+   outline and just put a little bit of a glow behind it"; the feathered try before) */
+#app.tfOverview:not(.tfEditing) #homeView .tfDashBarRow .tfDash-bar{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 14%,transparent)!important} /* (the glow went: Matt, 26 Nov: "remove the glow") */
+/* on a phone Home has no weather or time and date by its name (Matt, 26 Nov: "remove the weather and the time and date
+   from the mobile version") */
+@media (max-width:620px){#app .tfDashTitle :is(.hcHomeWx,.hcHomeClock){display:none!important}}
+
+/* Home lighter still (Matt, 26 Nov): the summaries and Schedule with no card behind them (their icons and words on the
+   background), Favourites and the area cards a further 20% down (55%) */
+#app.tfOverview:not(.tfEditing) #homeView :is(.tfDashBarRow .tfDash-bar,.tfDash-sched){background:transparent!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+#app.tfOverview #homeView :is(.tfDashTiles>.tfRoomTile,.tfDash-favs){background-color:color-mix(in srgb,var(--card) 55%,transparent)!important}
+/* with nothing behind them, their words take the page's colour (white at dusk and night) */
+#app.tfOverview #homeView :is(.tfDashBarRow .tfDash-bar,.tfDash-sched){--text:inherit!important;--muted:inherit!important;--tile:inherit!important;color:var(--text)!important}
+/* Home's cards with no frosted blur: Chrome's blur, near the top of the page's content, ran out of background and filled
+   in a band of coarse blocks along the top row's edges (Matt's screenshot, 26 Nov: "the strange lines are still there");
+   a plain see-through fill instead */
+#app.tfOverview #homeView :is(.tfDashTiles>.tfRoomTile,.tfDash-favs,.tfDash-sched,.tfDash-bar){-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+
+/* the Areas lab's test-page note under its title */
+#app .tfDashTitle .hcLabNote{display:block;width:max-content;max-width:100%;margin-top:12px;letter-spacing:0;white-space:normal}

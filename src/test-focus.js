@@ -10,6 +10,7 @@
 import { createHouse, isMadeUp, solarHistory, PLANT_RANGE } from './house.js';
 import { ICONS as HC_ICONS, svg as hcSvg } from './hc-icons.js';
 import { mountWeatherBento } from './weather-bento.js';
+import { wbSmoothIcon } from './weather-bento-art.js';
 import { createCoverArt, coverKind } from './cover-art.js';
 import { cardInk, parseColour, hexRgb, rgbHex } from './look.js';
 import { M, EASE, smoothD, gridLines, drawLine, stretchTo, closeDialog, toastBody, toastIn, toaster, springStep, squash, reduced } from './motion.js';
@@ -177,9 +178,7 @@ export function mountTestFocus(root, { config, getHass }) {
       tabPane('look', LOOK_GROUPS.map(([k, t]) => '<div class="tfSetGroup"><div class="sectionLabel">' + t + '</div><div class="toggleList" data-look-group="' + k + '"></div></div>').join('')) +
       // Style: the cards' look, filled in by the demo's Appearance controls (look.js), with a preview (Matt, 11 Nov)
       tabPane('style', '') +
-      tabPane('lights', '<p class="note tfTableNote">This is an example of a table. It is not how to control features in lights.</p>' +
-        '<div class="metaTableWrap"><table class="metaTable tfLightTable"><thead><tr><th>Light</th><th>Room</th><th>Now</th><th class="metaSwitchCol">Favourite</th><th>Tile</th><th>Pad</th></tr></thead>' +
-        '<tbody id="lightRows"></tbody></table></div><div class="tfLightCards" id="lightCards"></div>') +
+      tabPane('lights', '<div class="hcGroups" id="lightTables"></div><div class="tfLightCards hcGroups" id="lightCards"></div>') +
       tabPane('sources', '<div class="toggleList">' +
         SOURCES.map(([k, t, s]) => settingRow(t, s, '<select class="settingsSelect" data-source="' + k + '" aria-label="' + t + '"></select>')).join('') + '</div>') +
       tabPane('sums', '<div class="toggleList">' +
@@ -275,32 +274,46 @@ export function mountTestFocus(root, { config, getHass }) {
     pane.querySelectorAll('[data-sum-toggle]').forEach((b) => { const on = !(prefs.hiddenSums || []).includes(b.dataset.sumToggle); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
     // the lights table, by room, redrawn when something in it changed, but not while one of its lists is open. A switch
     // just pressed keeps its focus through the redraw (it used to stop the redraw, so a favourite never showed as set)
-    const body = $('lightRows'), cards = $('lightCards'), active = root.activeElement;
+    const body = $('lightTables'), cards = $('lightCards'), active = root.activeElement;
     const inside = body?.contains(active) || cards?.contains(active) ? active : null;
     if (!body || inside?.matches('select')) { fitChoices(); return; }
     const stars = new Set(starred()), opt = (v, t, cur, off) => '<option value="' + v + '"' + (v === cur ? ' selected' : '') + (off ? ' disabled' : '') + '>' + t + '</option>';
-    const html = Object.keys(states).filter((id) => id.startsWith('light.'))
-      .sort((a, b) => !whereIs.get(a) - !whereIs.get(b) || (whereIs.get(a) || '').localeCompare(whereIs.get(b) || '') || nameOf(a).localeCompare(nameOf(b))).map((id) => {
+    /* the lights as the Devices page lists its devices (Matt, 26 Nov: "the filtering and searching… grouping, sort by name"):
+       searched by name or room, grouped by room or not, sorted by name, room or on first; each group headed with its count */
+    let lv = { q: '', group: 'area', sort: 'name' };
+    try { lv = { ...lv, ...JSON.parse(localStorage.getItem('homecore-demo-light-list') || '{}') }; } catch (_e) { /* the defaults */ }
+    const words = String(lv.q || '').trim().toLowerCase();
+    const lightIds = Object.keys(states).filter((id) => id.startsWith('light.') && (!words || (nameOf(id) + ' ' + (whereIs.get(id) || '')).toLowerCase().includes(words)))
+      .sort((a, b) => (lv.sort === 'on' ? (states[b].state === 'on') - (states[a].state === 'on') : 0) || (lv.sort === 'area' ? (whereIs.get(a) || '~').localeCompare(whereIs.get(b) || '~') : 0) || nameOf(a).localeCompare(nameOf(b)));
+    const groups = lv.group === 'none' ? [{ name: '', ids: lightIds }] : [...lightIds.reduce((m, id) => { const k = whereIs.get(id) || 'No area'; if (!m.has(k)) m.set(k, []); m.get(k).push(id); return m; }, new Map())]
+      .sort(([a], [b]) => (a === 'No area') - (b === 'No area') || a.localeCompare(b)).map(([name, ids]) => ({ name, ids }));
+    // each group as the Devices page has its groups: its name and count above, its table in a card of its own (or its cards)
+    const groupHead = (g) => (g.name ? '<div class="sectionLabel">' + esc(g.name) + ' <span class="hcCount">' + g.ids.length + '</span></div>' : '');
+    const THEAD = '<thead><tr><th>Light</th><th>Room</th><th>Now</th><th class="metaSwitchCol">Favourite</th><th>Tile</th><th>Pad</th></tr></thead>';
+    const rowOfLight = (id) => {
         const style = look.lightStyles[id] || '', pad = look.lightPads[id] || '', fav = stars.has(id), name = esc(nameOf(id));
-        return '<tr><td><strong>' + name + '</strong></td><td>' + esc(whereIs.get(id) || '—') + '</td><td>' + esc(valueOf(id)) + '</td>' +
+        return '<tr><td><span class="hcNameCell"><span class="tfIcon"' + iconSlot(id, iconFor(id)) + lightAttrs(id) + '></span><strong>' + name + '</strong></span></td><td>' + esc(whereIs.get(id) || '—') + '</td><td>' + esc(valueOf(id)) + '</td>' +
           '<td class="metaSwitchCol"><button class="switch' + (fav ? ' on' : '') + '" type="button" role="switch" aria-checked="' + fav + '" data-light-fav="' + esc(id) + '" aria-label="' + name + ' is a favourite"></button></td>' +
           '<td><select class="settingsSelect" data-light-style="' + esc(id) + '" aria-label="' + name + ' tile">' + opt('', 'Default', style) + opt('tile', 'HomeCore tile', style) + opt('dac', 'Dual Axis Controller', style) + '</select></td>' +
           '<td><select class="settingsSelect" data-light-pad="' + esc(id) + '" aria-label="' + name + ' pad"' + (wantsDac(id) ? '' : ' disabled') + '>' + opt('', 'Default', pad) + opt('temperature', 'Temperature', pad) + opt('colour', 'Colour', pad) + '</select></td></tr>';
-      }).join('');
+    };
+    const html = groups.map((g) => '<section class="hcGroup">' + groupHead(g) + '<section class="card hcTableCard"><div class="metaTableWrap"><table class="metaTable tfLightTable hcDevTable">' + THEAD + '<tbody>' + g.ids.map(rowOfLight).join('') + '</tbody></table></div></section></section>').join('') ||
+      '<p class="note hcEmpty">No lights match</p>';
     // on a phone each light is a card (Matt, 8 Nov): its name and where it is, then Favourite with its switch, then its
     // tile, and its pad when it's the Dual Axis Controller, as choices
     const pickSeg = (field, id, label, opts, cur) => '<div class="themeChoice" role="group" aria-label="' + label + '">' + opts.map(([v, t]) =>
       '<button class="wxLayoutBtn" type="button" aria-pressed="' + (v === cur) + '" data-light-pick="' + field + '|' + esc(id) + '" data-v="' + v + '">' + t + '</button>').join('') + '</div>';
-    const cardsHtml = Object.keys(states).filter((id) => id.startsWith('light.'))
-      .sort((a, b) => !whereIs.get(a) - !whereIs.get(b) || (whereIs.get(a) || '').localeCompare(whereIs.get(b) || '') || nameOf(a).localeCompare(nameOf(b))).map((id) => {
+    const cardOfLight = (id) => {
         const fav = stars.has(id), name = esc(nameOf(id)), where = [whereIs.get(id), valueOf(id)].filter(Boolean).map(esc).join(' · ');
-        return '<div class="toggleList"><div class="toggleRow"><div><strong>' + name + '</strong><div class="status">' + where + '</div></div></div>' +
-          settingRow('Favourite', '', '<button class="switch' + (fav ? ' on' : '') + '" type="button" role="switch" aria-checked="' + fav + '" data-light-fav="' + esc(id) + '" aria-label="' + name + ' is a favourite"></button>') +
+        // each light the action card: its head (its chip, its name, where it is and how it is), then its settings inside
+        return '<div class="tfAction hcLightCard' + (states[id]?.state === 'on' ? ' on' : '') + '"' + lightAttrs(id) + ' data-tone="light"><div class="tfActionHead"><span class="tfIcon"' + iconSlot(id, iconFor(id)) + '></span><div class="tfName"><span class="activityRowName">' + name + '</span><span class="activityRowMeta">' + where + '</span></div></div>' +
+          '<div class="toggleList hcLightRows">' + settingRow('Favourite', '', '<button class="switch' + (fav ? ' on' : '') + '" type="button" role="switch" aria-checked="' + fav + '" data-light-fav="' + esc(id) + '" aria-label="' + name + ' is a favourite"></button>') +
           settingRow('Tile', '', pickSeg('lightStyles', id, name + ' tile', [['', 'Default'], ['tile', 'HomeCore tile'], ['dac', 'Dual Axis Controller']], look.lightStyles[id] || '')) +
-          (wantsDac(id) ? settingRow('Pad', '', pickSeg('lightPads', id, name + ' pad', [['', 'Default'], ['temperature', 'Temperature'], ['colour', 'Colour']], look.lightPads[id] || '')) : '') + '</div>';
-      }).join('');
-    if (body.dataset.html !== html) { body.innerHTML = html; body.dataset.html = html; }
-    if (cards.dataset.html !== cardsHtml) { cards.innerHTML = cardsHtml; cards.dataset.html = cardsHtml; }
+          (wantsDac(id) ? settingRow('Pad', '', pickSeg('lightPads', id, name + ' pad', [['', 'Default'], ['temperature', 'Temperature'], ['colour', 'Colour']], look.lightPads[id] || '')) : '') + '</div></div>';
+    };
+    const cardsHtml = groups.map((g) => '<section class="hcGroup">' + groupHead(g) + '<div class="hcLightGrid">' + g.ids.map(cardOfLight).join('') + '</div></section>').join('') || '<p class="note hcEmpty">No lights match</p>';
+    if (body.dataset.html !== html) { body.innerHTML = html; body.dataset.html = html; fillIcons(body); }
+    if (cards.dataset.html !== cardsHtml) { cards.innerHTML = cardsHtml; cards.dataset.html = cardsHtml; fillIcons(cards); }
     if (inside?.dataset.lightFav) (cards.contains(inside) ? cards : body).querySelector('[data-light-fav="' + CSS.escape(inside.dataset.lightFav) + '"]')?.focus({ preventScroll: true });
     fitChoices();
   }
@@ -530,7 +543,7 @@ export function mountTestFocus(root, { config, getHass }) {
     if (!id || order == null) { bentoBox.remove(); return; }
     if (!bentoBox.isConnected) grid.append(bentoBox);
     bentoBox.style.order = order;
-    if (!bento && !suspended) { bento = mountWeatherBento(bentoBox, { getHass, entityId: id, style: look.wxStyle, hoursWindow: () => look.hoursWindow }); bentoId = id; }
+    if (!bento && !suspended) { bento = mountWeatherBento(bentoBox, { getHass, entityId: id, style: look.wxStyle, hoursWindow: () => look.hoursWindow, ambient: true }); bentoId = id; }
   }
   // the dashboard's own weather cards (Matt, 27 Oct): the weather card, whose Now opens the Weather page, and Compared
   // to average in the place of the concept's to-do list; each kept mounted across redraws
@@ -784,8 +797,11 @@ export function mountTestFocus(root, { config, getHass }) {
     if (el.dataset.fitted === key) return true;
     let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
     for (const x of shapes) {
-      const b = x.getBBox(), cs = getComputedStyle(x), pad = cs.stroke !== 'none' ? (parseFloat(cs.strokeWidth) || 0) / 2 : 0;
-      if (!b.width && !b.height) continue;
+      const r = x.getBBox(), cs = getComputedStyle(x), pad = cs.stroke !== 'none' ? (parseFloat(cs.strokeWidth) || 0) / 2 : 0;
+      if (!r.width && !r.height) continue;
+      // a shape turned in place (a HomeCore fan's blades) is measured where it's drawn, not where it starts (the leadership
+      // demo's fix of 23 Nov: "the area fan icon is for some reason broken… Any fan it seems")
+      const m = x.transform?.baseVal?.consolidate?.()?.matrix, b = m ? (() => { const c = [[r.x, r.y], [r.x + r.width, r.y], [r.x, r.y + r.height], [r.x + r.width, r.y + r.height]].map(([u, v]) => [m.a * u + m.c * v + m.e, m.b * u + m.d * v + m.f]), xs = c.map((q) => q[0]), ys = c.map((q) => q[1]); return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }; })() : r;
       x1 = Math.min(x1, b.x - pad); y1 = Math.min(y1, b.y - pad); x2 = Math.max(x2, b.x + b.width + pad); y2 = Math.max(y2, b.y + b.height + pad);
     }
     if (!(x2 > x1)) return false;
@@ -1405,7 +1421,7 @@ export function mountTestFocus(root, { config, getHass }) {
   function seedFavourites() {
     if (!prefsReady || prefs.favSeeded || !model.rooms.length) return;
     const first = (test) => Object.keys(states).find((id) => isMadeUp(id) && test(id));
-    const made = [first((id) => id.startsWith('climate.')), first((id) => id.startsWith('cover.') && /curtain/.test(id)), first((id) => id.startsWith('valve.')), model.security.locks[0]];
+    const made = [model.security.locks[0], first((id) => id.startsWith('cover.') && /curtain/.test(id)), first((id) => id.startsWith('valve.') && /watering/i.test(states[id]?.attributes?.friendly_name || id)) || first((id) => id.startsWith('valve.')), first((id) => id.startsWith('climate.'))]; // Openable lock, Curtains, Watering, Thermostat
     prefs = { ...prefs, favourites: [...new Set([...(prefs.favourites ?? haHome.favorite_entities ?? []), ...made.filter(Boolean)])], favSeeded: true };
     savePrefs();
   }
@@ -1588,6 +1604,29 @@ export function mountTestFocus(root, { config, getHass }) {
     // edit mode's old choices (sections, order, sizes…) are left behind: the page is laid out as Home Assistant has it
     const v = mine?.value || {};
     prefs = { favourites: v.favourites ?? null, sources: v.sources, hiddenSums: v.hiddenSums, shownSums: v.shownSums, home: v.home, dash: v.dash, labDash: v.labDash ?? v.dash, named: v.named, favHidden: v.favHidden, suggest: v.suggest, favSeeded: v.favSeeded, areaOrder: v.areaOrder, areaMains: v.areaMains, areaCards: v.areaCards };
+    // Dashboards starts empty, once (Matt, 26 Nov: "custom dashboards, remove everything and just have a note"): everything
+    // but its name hidden, no tiles; what's added from then on stays
+    if (!v.dashEmpty26) { prefs = { ...prefs, dash: { cells: {}, spans: {}, opts: {}, hidden: Object.keys(BOARD_NAMES).filter((k) => k !== 'title'), tiles: [], known: NEW_CARDS }, dashEmpty26: true }; savePrefs(); }
+    else prefs.dashEmpty26 = true;
+    /* Home as Labs opens on it, once (Matt, 26 Nov: "This is the default that you should open up when you open up the
+       labs"): the summaries Lights, Climate, Security, Media players, Maintenance and Energy; Favourites (Openable lock,
+       Curtains, Watering, Thermostat) and Schedule; the areas not by floor, in Bento, no floor boxes, no mixed sizes,
+       Medium, fitting together */
+    if (!v.homeDefaults26) {
+      prefs = { ...prefs, homeDefaults26: true, favourites: [], favSeeded: false,
+        home: { ...(prefs.home || {}), sums: true, hiddenSums: [], shownSums: [], favs: true, schedule: true, weather: false, energy: false,
+          byFloor: false, areaLayout: 'bento', bentoBoxes: false, bentoMixed: false, areaSize: 'm', fitTogether: true } };
+      savePrefs();
+    } else prefs.homeDefaults26 = true;
+    /* …and its areas as the leadership demo has them (Matt, 26 Nov: "take what they have now for the leadership version demo
+       for the areas"): every area again, in Home's order, Small, Bento with mixed sizes fitted together: Living Room,
+       Kitchen and Bedroom large down the left, Bathroom, Balcony and Office beside them, Dining room, Workshop and Laundry
+       beside those, Spare room, Storage and Hallway underneath. Once, for everyone */
+    if (!v.homeAreas26b) {
+      prefs = { ...prefs, homeAreas26b: true, areaOrder: undefined,
+        home: { ...(prefs.home || {}), byFloor: false, areaLayout: 'bento', bentoBoxes: false, bentoMixed: true, areaSize: 's', fitTogether: true, areasOff: [], areasOff26: true } };
+      savePrefs();
+    } else prefs.homeAreas26b = true;
     haHome = home?.value || {};
     haSecurity = security?.value || {};
     predicted = Array.isArray(usage?.entities) ? usage.entities : [];
@@ -1955,7 +1994,8 @@ export function mountTestFocus(root, { config, getHass }) {
   });
   function areasLab(out) {
     out.dash = true;
-    out.push({ key: 'dash:title', html: '<h1 class="settingsTitle tfDashTitle" data-tf data-k="dash:title">Areas</h1>' });
+    // it says it's a test page, in the orange note (Matt, 26 Nov: "make it clear that the areas page here… is a test page")
+    out.push({ key: 'dash:title', html: '<h1 class="settingsTitle tfDashTitle" data-tf data-k="dash:title">Areas<span class="hcNotDesigned hcLabNote">A test page: other ways to show your areas, beyond the ones Home Assistant has now</span></h1>' });
     out.push({ key: 'sums', html: '<div class="tfDashBarRow hcLabBar" data-tf data-k="sums"><div class="hcLabModes" role="group" aria-label="Show the areas as">' +
       LAB_MODES.map(([k, name]) => '<button type="button" data-lab-mode="' + k + '" aria-pressed="' + (k === labMode) + '">' + name + '</button>').join('') + '</div></div>' });
     const shown = areasShown();
@@ -2010,12 +2050,28 @@ export function mountTestFocus(root, { config, getHass }) {
       t.toggleAttribute('data-ff-bottom', r === down - 1 || i + across >= N);
     });
   }
+  // nothing on the dashboard but its name: it says so, and opens what can be added
+  const dashEmpty = () => { const d = boardPrefs(); return !(d.tiles || []).length && Object.keys(BOARD_NAMES).every((k) => k === 'title' || d.hidden.includes(k)); };
+  // Home's head: the greeting, the name (or, on an area's page from Home, the area's with a back button: Matt, 26 Nov),
+  // the time and date and the weather
+  const dashTitle = (room = null, order = null) => {
+    const name = room ? '<span class="hcTitleName"><button class="back" type="button" data-area-back aria-label="Back to Home">' + BACK + '</button>' + esc(room.name) + '</span>'
+      : '<span>' + esc(getHass()?.config?.location_name || 'Home') + '</span>';
+    return '<h1 class="settingsTitle tfDashTitle" data-tf data-k="dash:title"' + (order != null ? ' style="order:' + order + '"' : '') + '>' + ((overview ? welcomeOn() : dashPrefs().welcome) ? '<span class="tfGreeting">' + esc(greeting()) + '</span>' : '') +
+      (overview ? '<span class="hcTitleLine">' + name + '<span class="hcHomeClock" data-wx-clock>' + esc(wxClock()) + '</span></span>' + homeWxTile() : esc(getHass()?.config?.location_name || 'Home')) + '</h1>';
+  };
+  const pushSums = (out, sums, order = null) => { if (sums.length) out.push({ key: 'sums', wrap: (inner) => '<div class="tfDashBarRow" data-tf data-k="sums"' + (order != null ? ' style="order:' + order + '"' : '') + '>' + dashWrap('tfDash-bar', 'sums-bar', 'Summaries', false)(inner).replace(' data-tf', '') + '</div>', tiles: sums.map((s) => ({ key: 'sum:' + s.key, html: summaryRow(s) })) }); };
   function dashboard(out, sums) {
     if (AREAS_LAB && !overview) return areasLab(out);
     out.dash = true;
-    out.push({ key: 'dash:title', html: '<h1 class="settingsTitle tfDashTitle" data-tf data-k="dash:title">' + ((overview ? welcomeOn() : dashPrefs().welcome) ? '<span class="tfGreeting">' + esc(greeting()) + '</span>' : '') + esc(getHass()?.config?.location_name || 'Home') + '</h1>' });
+    out.push({ key: 'dash:title', html: dashTitle() });
     // the summaries: a row of their own, the bar only as wide as its tiles
-    if (sums.length) out.push({ key: 'sums', wrap: (inner) => '<div class="tfDashBarRow" data-tf data-k="sums">' + dashWrap('tfDash-bar', 'sums-bar', 'Summaries', false)(inner).replace(' data-tf', '') + '</div>', tiles: sums.map((s) => ({ key: 'sum:' + s.key, html: summaryRow(s) })) });
+    pushSums(out, sums);
+    // the note is HomeCore's tile (Matt, 26 Nov: "It should just look like a tile card that we have… following that same
+    // pattern"): its chip, its name and what it does under it
+    if (!overview && dashEmpty()) out.push({ key: 'dash:empty', html: '<button class="tfAction tfHeadOnly hcDashEmpty" type="button" data-tf data-k="dash:empty" data-dash-empty>' +
+      '<span class="tfActionHead"><span class="tfIcon" aria-hidden="true">' + PLUS + '</span><span class="tfName"><span class="activityRowName">Add something here</span>' +
+      '<span class="activityRowMeta">A tile or a card</span></span></span></button>' });
     if (!overview && areasShown().length) out.push({ key: 'areas', html: areasHtml(0) });
     // what you've starred always shows, from any room; only the suggestions that fill the card keep to the dashboard's rooms
     const favs = dashFavourites();
@@ -2068,7 +2124,7 @@ export function mountTestFocus(root, { config, getHass }) {
   // a thermostat to M)
   const SIZE_NAMES = ['XS', 'S', 'M', 'L', 'XL'], ROWS_MOST = SIZE_NAMES.length;
   const WIDTH_NAMES = ['Narrow', 'Wide', 'Really wide'];
-  const SIZES = { wx: 5, areas: 5, flow: 5, flowfull: 10, favs: 5, act: 5, energy: 4, avg: 4, aq: 4, pollen: 4, radar: 4, hourly: 4, sun: 4, moon: 4, uv: 4, humidity: 4, pressure: 4, wind: 4, visibility: 4 };
+  const SIZES = { empty: 1, wx: 5, areas: 5, flow: 5, flowfull: 10, favs: 5, act: 5, energy: 4, avg: 4, aq: 4, pollen: 4, radar: 4, hourly: 4, sun: 4, moon: 4, uv: 4, humidity: 4, pressure: 4, wind: 4, visibility: 4 };
   // a tile whose entity isn't in the states yet keeps its saved height (it can't be measured, and must never stop the board)
   const mostRows = (key) => (key === 'flowfull' || (AREAS_LAB && key === 'flow') ? FULL_MOST : !key.includes('.') || !states[key] || (key.startsWith('light.') && wantsDac(key)) ? ROWS_MOST : Math.min(ROWS_MOST, cardControls(key).length + 1));
   const sizeOf = (key) => {
@@ -2105,7 +2161,11 @@ export function mountTestFocus(root, { config, getHass }) {
   const OVERVIEW_ROOMS = ['living_room', 'kitchen', 'bedroom', 'bathroom', 'balcony', 'office'];
   // Home's areas: every one in order (Edit Home page's Areas tab lists them), and those switched on (Matt, 16 Nov: Home's
   // own switches, apart from the dashboard's Areas card)
-  const overviewRooms = () => { const off = new Set(prefs.home?.areasOff || []); return overviewRoomsAll().filter((r) => !off.has(r.id)); };
+  // Office, Spare room and Hallway are off Home to start (Matt, 26 Nov: "remove the office, spare room, hallway from the
+  // areas here"); the edit tray's switches still bring them back
+  const HOME_OFF = []; // (all of them since the leadership demo's layout, 26 Nov)
+  const homeAreasOff = () => new Set(prefs.home?.areasOff26 ? prefs.home.areasOff || [] : [...(prefs.home?.areasOff || []), ...HOME_OFF]);
+  const overviewRooms = () => { const off = homeAreasOff(); return overviewRoomsAll().filter((r) => !off.has(r.id)); };
   const overviewRoomsAll = () => (prefs.areaOrder?.length ? byAreaOrder(areaRooms) : [...areaRooms].sort((a, b) => ((OVERVIEW_ROOMS.indexOf(a.id) + 1) || 99) - ((OVERVIEW_ROOMS.indexOf(b.id) + 1) || 99)));
   function overviewPrefs() {
     const rooms = overviewRooms().map((r) => 'room:' + r.id), cells = { favs: { col: 3, row: 0 } };
@@ -2128,7 +2188,7 @@ export function mountTestFocus(root, { config, getHass }) {
   // what's on the board: each card's key, its element, its width in pegs ('full' the whole width) and whether it's a tile
   function boardItems() {
     const q = (sel) => grid.querySelector(sel);
-    return [['title', q('.tfDashTitle'), 'full'], ['sums', q('.tfDashBarRow'), 'full'], ['wx', dashBoxes.wx, 2], ['areas', q('.tfAreas'), 'areas'], ['flow', q('.tfDash-flow'), 2], ['flowfull', q('.tfDash-flowfull'), 99],
+    return [['title', q('.tfDashTitle'), 'full'], ['empty', q('.hcDashEmpty'), 1], ['sums', q('.tfDashBarRow'), 'full'], ['wx', dashBoxes.wx, 2], ['areas', q('.tfAreas'), 'areas'], ['flow', q('.tfDash-flow'), 2], ['flowfull', q('.tfDash-flowfull'), 99],
       ['favs', q('.tfDash-favs'), 2], ['sched', q('.tfDash-sched'), 2], ['act', q('.tfDash-act'), 2], ['energy', q('.tfDash-energy'), 2], ['avg', dashBoxes.avg, 2],
       ...NEW_CARDS.map((k) => [k, dashBoxes[k], WIDGET_COLS[k] || 1]),
       ...[...grid.querySelectorAll('.tfDashTiles > [data-k]')].map((el) => [el.dataset.k, el, 1, true])]
@@ -2290,11 +2350,12 @@ export function mountTestFocus(root, { config, getHass }) {
       renderTray();
       return;
     }
-    if (overview) { layoutHome(items, W, phone); return; }
+    if (overview) { layoutHome(items, W, phone); alignHomeClock(); requestAnimationFrame(alignHomeClock); setTimeout(alignHomeClock, 450); return; }
     grid.style.setProperty('--peg-w', w + 'px');
     // a card being dragged out of the edit tray shows where it would land
     const hidden = new Set(dashPrefs().hidden), pitch = w + PEG_GAP;
     if (drag?.fromTray) hidden.delete(drag.key);
+    if (editing || !dashEmpty()) hidden.add('empty'); // the tray's open, or something's been added: the note steps aside
     items.forEach((it) => it.el.classList.toggle('tfBoardHidden', hidden.has(it.key)));
     const shown = items.filter((it) => !hidden.has(it.key) && getComputedStyle(it.el).display !== 'none');
     // the header: the name and the summaries, the full width, each at its own height, 16 apart
@@ -2450,7 +2511,12 @@ export function mountTestFocus(root, { config, getHass }) {
     const shown = items.filter((it) => !hidden.has(it.key) && getComputedStyle(it.el).display !== 'none');
     // the dashboard's columns and gap (Matt, 17 Nov: Home's cards as wide as the custom dashboard's): as many columns as fit
     // at 200 or more, stretched to fill the page, 16 apart; two across on a phone
-    const gap = PEG_GAP, cols = phone ? { n: 2, w: Math.floor((W - gap) / 2) } : pegsFor(W);
+    // twice the dashboard's 16 between Home's cards on a wider screen (Matt, 26 Nov: "double the space between the cards on
+    // this dashboard page"), its columns worked out with that gap
+    const gap = phone ? PEG_GAP : 2 * PEG_GAP, cols = phone ? { n: 2, w: Math.floor((W - gap) / 2) } : (() => {
+      const n = Math.max(1, Math.floor((W + gap) / (PEG_MIN + gap)));
+      return { n, w: Math.max(1, Math.min(PEG_MAX, Math.floor((W - (n - 1) * gap) / n))) };
+    })();
     // the summaries (and Favourites as a strip) as wide as five of Matt's columns, or the page where it's narrower
     const gridW = Math.min(W, HOME.full);
     let top = 0;
@@ -2493,7 +2559,7 @@ export function mountTestFocus(root, { config, getHass }) {
        a column 520 wide, one under another, the areas to their right in whichever layout (Matt, 12 Nov, his Figma "Home
        (overview)": the weather under Favourites, the areas beside them), the page as tall as the taller side; or Rows,
        across the top a row at a time, the areas under them. On a phone everything runs down the page */
-    const side = cardsAs() === 'stacked' && !phone && tops.length > 0;
+    const side = cardsAs() === 'stacked' && !phone && tops.length > 0 && W - tw - gap >= cols.w; // (only with room for an area column beside them; else the areas go under)
     let x = 0, rowH = 0, colB = top;
     tops.forEach((it) => {
       it.el.classList.add('tfBoardItem');
@@ -2503,7 +2569,8 @@ export function mountTestFocus(root, { config, getHass }) {
       // nine are five, nothing to fade or scroll (Matt, 12 Nov, as Move Assistant v0.85.0; it was 337 whatever the count).
       // The others 337 as drawn; on a phone each as tall as it needs
       let h = th;
-      if (phone || it.key === 'favs') { Object.assign(it.el.style, { width: tw + 'px', height: '' }); h = it.el.offsetHeight; }
+      // and Schedule as tall as its events need (Matt, 26 Nov: "I shouldn't have to be scrolling… They should just be the size that they should be")
+      if (phone || it.key === 'favs' || it.key === 'sched') { Object.assign(it.el.style, { width: tw + 'px', height: '' }); h = it.el.offsetHeight; }
       if (side) { put(it, { x: 0, y: colB, w: tw, h }); colB += h + gap; return; }
       put(it, { x, y: top, w: tw, h });
       x += tw + gap; rowH = Math.max(rowH, h);
@@ -2526,13 +2593,19 @@ export function mountTestFocus(root, { config, getHass }) {
     const columns = lay === 'columns' && byFloor && !phone;
     const BOX = 12; // a floor's box: 12 around its name and areas, its corners the cards' and 12 (they nest)
     const headH = (f) => (f.name ? HOME.floorHead + HOME.floorGap : 0);
+    /* Mixed sizes by rank (Matt, 23 Nov: "put the highest ranked (in the order set...) areas larger, and the lower ones
+       smaller"): the first three in the order set, across the whole home, are large (two wide, as the Balcony was); the rest
+       are the half size, and never grow to fill a gap */
+    const RANKED = 3, rankIds = overviewRooms().map((r) => 'room:' + r.id);
+    const ranked = (it) => mixed && rankIds.indexOf(it.key) > -1 && rankIds.indexOf(it.key) < RANKED;
+    const bigs = (f) => f.cards.filter(ranked).length;
     // a group's cards in its own columns (c), each in the first free cell from the top left; a big one two by two (on a
     // phone the whole width). Gives each card's place inside the group, and the group's height
     const pack = (f, c, w) => {
       const taken = new Set(), at = [];
-      f.cards.forEach((it, i) => {
-        // the first is the biggest but only two wide, as tall as the others (Matt, 18 Nov: "why is the living room SO big?")
-        const big = mixed && i === 0 && c >= 2 && f.cards.length > 1, sc = big ? 2 : 1, sr = 1;
+      f.cards.forEach((it) => {
+        // a large one is two wide, as tall as the others (Matt, 18 Nov: "why is the living room SO big?")
+        const big = ranked(it) && c >= 2, sc = big ? 2 : 1, sr = 1;
         it.el.classList.add('tfBoardItem');
         it.el.dataset.cols = sc; it.el.toggleAttribute('data-narrow', false);
         for (let r = 0; ; r++) {
@@ -2543,7 +2616,7 @@ export function mountTestFocus(root, { config, getHass }) {
       const rowsN = Math.max(0, ...at.map((p) => p.r + p.sr));
       // in Bento a card with nothing under it grows down to the group's foot, so the box has no hole (not on a phone,
       // where each row is as tall as it needs)
-      if (bento && !phone) at.forEach((p) => { while (p.r + p.sr < rowsN && !taken.has((p.r + p.sr) + ',' + p.c) && p.sc === 1) { taken.add((p.r + p.sr) + ',' + p.c); p.sr++; } });
+      if (bento && !phone && !mixed) at.forEach((p) => { while (p.r + p.sr < rowsN && !taken.has((p.r + p.sr) + ',' + p.c) && p.sc === 1) { taken.add((p.r + p.sr) + ',' + p.c); p.sr++; } });
       // its rows as the dashboard counts them (a big one, or one grown down in Bento, more), so it shows what the dashboard's
       // area card shows at that size
       at.forEach((p) => { p.it.el.dataset.rows = Math.min(5, p.sr * dims.rows); Object.assign(p.it.el.style, { width: (p.sc * w + (p.sc - 1) * gap) + 'px', height: (p.sr * ch + (p.sr - 1) * gap) + 'px' }); });
@@ -2599,8 +2672,8 @@ export function mountTestFocus(root, { config, getHass }) {
         sky = out.sort((a, b) => a.x0 - b.x0);
       };
       floors.forEach((f) => {
-        const cells = f.cards.length + (mixed && f.cards.length > 1 ? 3 : 0);
-        let c = phone ? 2 : Math.min(n, Math.max(mixed && f.cards.length > 1 ? 2 : 1, cells <= 3 ? cells : Math.ceil(cells / 2)));
+        const cells = f.cards.length + bigs(f);
+        let c = phone ? 2 : Math.min(n, Math.max(bigs(f) ? 2 : 1, cells <= 3 ? cells : Math.ceil(cells / 2)));
         while (!phone && c > 1 && c * cw + (c - 1) * gap + 2 * BOX > aW) c--; // a phone keeps two, a little narrower
         // its box as many cards wide as suits it, or fewer when that lets it sit higher, beside another box; a card a column
         // wide, unless even one in its box can't be (a phone, or one column beside the stack)
@@ -2625,13 +2698,31 @@ export function mountTestFocus(root, { config, getHass }) {
       const fitCols = (f) => {
         if (!prefs.home?.fitTogether || phone) return n;
         const besideH = side ? colB - gap - top : null;
-        const shape = (c) => { const cells = f.cards.length + (mixed && f.cards.length > 1 && c >= 2 ? 3 : 0), rows = Math.ceil(cells / c); return { holes: rows * c - cells, rows, h: headH(f) + rows * ch + (rows - 1) * gap, w: c * cw + (c - 1) * gap }; };
-        const neat = (x) => x.holes === 0 || (bento && x.holes === 1 && x.rows > 1);
+        const shape = (c) => { const cells = f.cards.length + (c >= 2 ? bigs(f) : 0), rows = Math.ceil(cells / c); return { holes: rows * c - cells, rows, h: headH(f) + rows * ch + (rows - 1) * gap, w: c * cw + (c - 1) * gap }; };
+        const neat = (x) => x.holes === 0 || (bento && !mixed && x.holes === 1 && x.rows > 1);
         for (let c = 1; c <= n; c++) { const x = shape(c); if (neat(x) && x.h <= (besideH ?? x.w)) return c; }
         for (let c = 1; c <= n; c++) { const x = shape(c); if (x.h <= (besideH ?? x.w)) return c; }
         return n;
       };
-      floors.forEach((f, i) => {
+      /* not by floor, Bento with mixed sizes, fitted together (Matt, 26 Nov): four columns of the page's grid beside the
+         cards (each a column wide, never stretched to fill the page): the large areas down the left two, the next ones in the column beside them, the last
+         ones in the column beside that, the rest in rows underneath (Living Room, Bathroom, Dining room; Kitchen, Balcony,
+         Workshop; Bedroom, Office, Laundry; then Spare room, Storage, Hallway). Where four columns don't fit beside the cards, as before */
+      const quarter = cw; // each a column of the page's grid, the size the cards already are (Matt, 26 Nov: "sticking to those sizes")
+      if (!byFloor && mixed && prefs.home?.fitTogether && !phone && floors.length === 1 && n >= 4 && bigs(floors[0])) {
+        const f = floors[0], big = f.cards.filter(ranked), small = f.cards.filter((it) => !ranked(it)), k = big.length;
+        const nextCol = small.slice(0, k), lastCol = small.length > 2 * k ? small.slice(small.length - k) : small.slice(k), rest = small.slice(k, small.length - lastCol.length);
+        const at = [...big.map((it, r) => ({ it, r, c: 0, sc: 2 })), ...nextCol.map((it, r) => ({ it, r, c: 2, sc: 1 })), ...lastCol.map((it, r) => ({ it, r, c: 3, sc: 1 })),
+          ...rest.map((it, i) => ({ it, r: k + Math.floor(i / 4), c: i % 4, sc: 1 }))];
+        const rowsN = Math.max(0, ...at.map((q) => q.r + 1));
+        at.forEach((q) => {
+          q.it.el.classList.add('tfBoardItem');
+          q.it.el.dataset.cols = q.sc; q.it.el.dataset.rows = dims.rows; q.it.el.toggleAttribute('data-narrow', false);
+          Object.assign(q.it.el.style, { width: (q.sc * quarter + (q.sc - 1) * gap) + 'px', height: ch + 'px' });
+        });
+        place(f, { w: aW, places: at.map((q) => ({ it: q.it, x: q.c * (quarter + gap), y: q.r * (ch + gap), w: q.sc * quarter + (q.sc - 1) * gap, h: ch })) }, aX, top);
+        top += rowsN * (ch + gap);
+      } else floors.forEach((f, i) => {
         if (i) top += HOME.floorTop;
         const g = pack(f, fitCols(f), cw);
         place(f, { ...g, w: aW }, aX, top);
@@ -2682,15 +2773,21 @@ export function mountTestFocus(root, { config, getHass }) {
     grid.querySelectorAll('.tfBoardItem').forEach((el) => [...el.children].forEach((c) => { if (!c.classList.contains('tfEditChips') && !c.classList.contains('hcRzBox')) c.toggleAttribute('inert', on); }));
     let cells = grid.querySelector('.tfBoardCells'), land = grid.querySelector('.tfBoardLand');
     if (!on) { cells?.remove(); land?.remove(); closeBoardMenu(); return height; }
-    // the cells, with a few spare rows under the cards to drop into
-    const rows = boardRows + EXTRA_ROWS;
+    // the cells, with a few spare rows under the cards to drop into, and on to the bottom of the screen (Matt, 26 Nov: "make
+    // the dot and cross pattern cover the whole screen when we're in the edit mode"), at the scale the board takes beside
+    // the tray; only the spare rows make the page taller
+    const k = trayTucked ? 1 : Math.max(0.35, Math.min(1, (window.innerWidth - tray.offsetWidth - 24 - grid.getBoundingClientRect().left) / grid.clientWidth));
+    const toEdge = (window.innerHeight - grid.getBoundingClientRect().top) / k - boardTop, toBottom = Math.ceil((toEdge + PEG_GAP) / ROW_PITCH);
+    const rows = Math.max(boardRows + EXTRA_ROWS, toBottom);
     if (!cells) { cells = Object.assign(document.createElement('div'), { className: 'tfBoardCells' }); cells.setAttribute('aria-hidden', 'true'); grid.prepend(cells); }
     cells.style.top = boardTop + 'px';
+    // cut at the screen's bottom edge (its marks' own margin kept), so the page doesn't scroll for them
+    cells.style.height = Math.max((boardRows + EXTRA_ROWS) * ROW_PITCH, Math.floor(toEdge - 25)) + 'px';
     if (cells.dataset.size !== n + 'x' + rows + 'x' + w) {
       cells.dataset.size = n + 'x' + rows + 'x' + w;
       cells.innerHTML = gridMarks(n, rows, w);
     }
-    height = Math.max(height, boardTop + rows * ROW_PITCH - PEG_GAP);
+    height = Math.max(height, boardTop + (boardRows + EXTRA_ROWS) * ROW_PITCH - PEG_GAP);
     shown.forEach((it) => {
       const host = it.el;
       if (!host || host.querySelector(':scope > .tfEditChips')) return;
@@ -2809,6 +2906,16 @@ export function mountTestFocus(root, { config, getHass }) {
     saveDash({ ...dash, hidden: dash.hidden.filter((k) => k !== key) });
     layoutBoard();
     toast(said);
+    pulseEdit(key);
+  }
+  // a card just added: a ring pulses round its ⋯ a few times, to say it can be edited further (Matt, 26 Nov)
+  function pulseEdit(key) {
+    setTimeout(() => {
+      const more = grid.querySelector('[data-board-more="' + CSS.escape(key) + '"]');
+      if (!more) return;
+      more.classList.remove('hcPulse'); void more.offsetWidth; more.classList.add('hcPulse');
+      setTimeout(() => more.classList.remove('hcPulse'), 3600);
+    }, 250);
   }
   // the dashboard's tiles as they are: yours, else today's picks as shown. A tile added goes in the first free cell
   // (left of the edit tray), everything else staying where it is; one removed leaves its cell free. Tiles aren't hidden any more, so any hidden
@@ -2820,7 +2927,7 @@ export function mountTestFocus(root, { config, getHass }) {
     refresh();
     renderTray();
   }
-  const addTile = (id) => { setTiles([...tilesNow().filter((x) => x !== id), id], cellsNow()); toast(boardName(id) + ' added'); reveal(id); };
+  const addTile = (id) => { setTiles([...tilesNow().filter((x) => x !== id), id], cellsNow()); toast(boardName(id) + ' added'); reveal(id); pulseEdit(id); };
   const removeTile = (id) => { const before = prefs, cells = cellsNow(); delete cells[id]; setTiles(tilesNow().filter((x) => x !== id), cells); toast(boardName(id) + ' removed', undoTo(before)); };
   /* ---------- toasts (Matt, 29 Oct) ----------
      The card's toast, at the bottom middle of the board (left of the edit tray when it's out) and 12 above the bottom
@@ -3126,7 +3233,7 @@ export function mountTestFocus(root, { config, getHass }) {
     const search = homeTray.querySelector('[data-he-search]')?.value || '';
     // tabs instead of folding sections (Matt, 12 Nov: "use tabs as well"), as the dashboard's tray: Page, Favourites, Summaries
     const tabs = [['page', 'Page'], ['favs', 'Favourites'], ['sums', 'Summaries'], ['areas', 'Areas']];
-    const areasOff = new Set(prefs.home?.areasOff || []);
+    const areasOff = homeAreasOff();
     const areaLi = (r) => '<li class="hcHeRow" data-he-id="' + esc(r.id) + '">' + heGrip(r.name) +
       '<span class="tfIcon"><span class="tfAreaGlyph"' + iconSlot('area:' + r.id, r.icon || 'mdi:texture-box', r.name) + '></span></span><span class="activityRowName">' + esc(r.name) + '</span>' +
       sw(!areasOff.has(r.id), 'Show ' + r.name + ' on Home', 'data-he-area="' + esc(r.id) + '"') + '</li>';
@@ -3255,7 +3362,7 @@ export function mountTestFocus(root, { config, getHass }) {
     if (t.closest('[data-he-fit]')) { homePrefs({ fitTogether: !prefs.home?.fitTogether }); return; }
     const fl = t.closest('[data-he-flag]'); if (fl) { const key = fl.dataset.heFlag; homePrefs({ [key]: prefs.home?.[key] === false }); return; }
     if (t.closest('[data-he-suggest]')) { homeSave({ suggest: !suggestOn() }); return; }
-    const ha = t.closest('[data-he-area]'); if (ha) { const off = new Set(prefs.home?.areasOff || []), id = ha.dataset.heArea; if (off.has(id)) off.delete(id); else off.add(id); homePrefs({ areasOff: [...off] }); return; }
+    const ha = t.closest('[data-he-area]'); if (ha) { const off = homeAreasOff(), id = ha.dataset.heArea; if (off.has(id)) off.delete(id); else off.add(id); homePrefs({ areasOff: [...off], areasOff26: true }); return; }
     const sm = t.closest('[data-he-sum]');
     if (sm) {
       const k = sm.dataset.heSum, on = !sumOn(k), h = prefs.home || {};
@@ -3656,7 +3763,7 @@ export function mountTestFocus(root, { config, getHass }) {
     else if (t.hasAttribute('data-info')) openInfo(t);
     else if (t.hasAttribute('data-dash-sums')) { saveDash({ ...boardPrefs(), hidden: boardPrefs().hidden.filter((k) => k !== 'sums'), sumsOff: !dashOf()?.sumsOff }); refresh(); renderTray(); }
     else if (t.hasAttribute('data-dash-welcome')) { const d = dashPrefs(); saveDash({ ...d, welcome: !d.welcome }); refresh(); renderTray(); }
-    else if (t.hasAttribute('data-tray-tuck')) { trayTucked = !trayTucked; renderTray(); scaleBoard(); }
+    else if (t.hasAttribute('data-tray-tuck')) { trayTucked = !trayTucked; layoutBoard(); } // the dots redrawn for the board's new scale
     else if (t.hasAttribute('data-phone-toggle')) { phoneShown = !phoneShown; renderTray(); if (phoneShown) phone.querySelector('[data-phone-key]')?.focus({ preventScroll: true }); }
     else if (t.dataset.trayCard) { if (ev.detail === 0) { showCard(t.dataset.trayCard); renderTray(); } } // a press from the keyboard; a pointer's is its drag
     else if (t.dataset.favEye) setFavShown(t.dataset.favEye, t.getAttribute('aria-pressed') !== 'true');
@@ -4087,13 +4194,23 @@ export function mountTestFocus(root, { config, getHass }) {
     app.classList.toggle('tfDash', !page);
     whereIs = new Map();
     model.rooms.forEach((r) => [...r.actions, ...r.plugs, ...r.readings, ...r.openings, ...r.solar, ...r.plants.flatMap((p) => [p.id, ...p.readings])].forEach((id) => whereIs.set(id, r.name)));
-    if (!page) return dashboard(out, summaryData());
-    out.push({ key: 'areahead', html: areaHead(page, ++order) });
+    if (!page) { app.classList.remove('hcAreaHome'); return dashboard(out, summaryData()); }
+    // an area's page from Home keeps Home's head (Matt, 26 Nov: "the summaries… stay in the same place. The title stays in
+    // the same place too, but that just changes to balcony with a back button"); only what's under it changes
+    const homeHead = overview && page.room;
+    if (homeHead) { out.push({ key: 'dash:title', html: dashTitle(page.room, ++order) }); pushSums(out, summaryData(), ++order); app.classList.add('hcAreaHome'); [60, 400].forEach((t) => setTimeout(alignHomeClock, t)); }
+    else { app.classList.remove('hcAreaHome'); out.push({ key: 'areahead', html: areaHead(page, ++order) }); }
     // an area's page isn't designed yet: it says so under its header (Matt, 16 Nov: "this is not designed", "below the
     // header")
     if (page.room && aceArea === page.room.id) { out.push({ key: 'areaedit', html: aceHtml(page.room, ++order) }); return out; }
     if (aceArea) { aceArea = null; acePick = null; }
-    if (page.room) out.push({ key: 'areanote', html: '<p class="hcNotDesigned" data-tf data-k="areanote" style="order:' + (++order) + '">This is not designed</p>' });
+    if (page.room && !homeHead) out.push({ key: 'areanote', html: '<p class="hcNotDesigned" data-tf data-k="areanote" style="order:' + (++order) + '">This is not designed</p>' });
+    // and its favourites first (Matt, 26 Nov: "favorites will appear on the balconies page"): those starred in this area
+    if (homeHead) {
+      const favs = starred().filter((id) => whereIs.get(id) === page.room.name && states[id]);
+      const fo = ++order;
+      if (favs.length) out.push({ key: 'areafavs:' + page.room.id, wrap: (inner) => dashWrap('tfDash-favs hcAreaFavs', 'areafavs', 'Favourites', true)(inner).replace('<section ', '<section style="order:' + fo + '" '), tiles: favs.map((id) => ({ key: 'fav:' + id, html: deviceRow(id, {}) })) });
+    }
     if (page.key === 'weather') { out.weather = ++order; return out; }
     if (page.demo) return demoPage(out, page.key, order);
     // the section: a room's energy, readings and plants, then its tiles
@@ -4267,8 +4384,60 @@ export function mountTestFocus(root, { config, getHass }) {
       addEventListener('pointermove', move, true); addEventListener('pointerup', end, true); addEventListener('pointercancel', end, true);
     });
   }
+  const wxClock = () => {
+    const now = new Date(), lang = getHass()?.locale?.language || undefined;
+    return now.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' }) + '  ' + now.toLocaleDateString(lang, { weekday: 'long', day: 'numeric', month: 'long' });
+  };
+  setInterval(() => { grid?.querySelectorAll('[data-wx-clock]').forEach((c) => { const t = wxClock(); if (c.textContent !== t) c.textContent = t; }); alignHomeClock(); }, 10000);
+  // Home's time and date end where the summaries end (Matt, 26 Nov: "in line with… the end of the summaries, extending
+  // right to left")
+  /* the weather as an XS tile above Home's time and date, opening the Weather page (Matt, 26 Nov; with or without its
+     background is still to be tried) */
+  const WX_ICONS = { sunny: 'mdi:white-balance-sunny', /* HomeCore's sun */ 'clear-night': 'mdi:weather-night', partlycloudy: 'mdi:weather-partly-cloudy', cloudy: 'mdi:weather-cloudy', fog: 'mdi:weather-fog',
+    rainy: 'mdi:weather-rainy', pouring: 'mdi:weather-pouring', snowy: 'mdi:weather-snowy', 'snowy-rainy': 'mdi:weather-snowy-rainy', hail: 'mdi:weather-hail',
+    lightning: 'mdi:weather-lightning', 'lightning-rainy': 'mdi:weather-lightning-rainy', windy: 'mdi:weather-windy', 'windy-variant': 'mdi:weather-windy-variant' };
+  const WX_WORDS = { sunny: 'Sunny', 'clear-night': 'Clear', partlycloudy: 'Partly cloudy', cloudy: 'Cloudy', fog: 'Fog', rainy: 'Rain', pouring: 'Heavy rain', snowy: 'Snow',
+    'snowy-rainy': 'Sleet', hail: 'Hail', lightning: 'Thunder', 'lightning-rainy': 'Thunderstorms', windy: 'Windy', 'windy-variant': 'Windy', exceptional: 'Unsettled' };
+  function homeWxTile() {
+    const id = weatherId(), st = id && states[id];
+    if (!st) return '';
+    const t = st.attributes?.temperature, unit = st.attributes?.temperature_unit || '';
+    // no background: the icon (which opens the Weather page), what it's doing, then the temperature (Matt, 26 Nov)
+    // the icon is HomeCore's icon button (Matt, 26 Nov: "that button size thing"): the 40 chip, faint as it opens a page
+    // its icon the weather card's own (Matt, 26 Nov: "the same big circle orange thing"): the sun on its sky, at 40
+    const art = wbSmoothIcon(st.state, false, st.state === 'clear-night', 'homewx'), kind = 'wb' + art.k[0].toUpperCase() + art.k.slice(1) + (art.night ? ' wbNight' : '');
+    return '<span class="hcHomeWx"><button class="hcHomeWxIcon" type="button" data-hc-home-wx aria-label="Open the Weather page" title="Weather">' +
+      '<span class="wbWx ' + kind + '" aria-hidden="true">' + art.svg + '</span></button>' +
+      '<span class="hcHomeWxWords">' + esc(WX_WORDS[st.state] || st.state) + '</span>' + (t != null ? '<span class="hcHomeWxTemp">' + esc(Math.round(t) + unit) + '</span>' : '') + '</span>';
+  }
+  let homeBarW = 0, homeWxEnd = null;
+  function alignHomeClock() {
+    const title = grid?.querySelector('.tfDashTitle'), bar = grid?.querySelector('.tfDashBarRow > *');
+    if (!overview || !title || !bar) return;
+    // an area's page keeps Home's summaries bar as wide as Home has it
+    if (!app.classList.contains('hcAreaHome')) homeBarW = bar.offsetWidth;
+    else if (homeBarW && bar.style.width !== homeBarW + 'px') bar.style.width = homeBarW + 'px';
+    // and its head as wide as the page (the area's own grid is only as wide as its columns)
+    if (app.classList.contains('hcAreaHome')) { const w = grid.clientWidth + 'px'; [title, bar.parentElement].forEach((el) => { if (el.style.width !== w) el.style.width = w; }); }
+    const right = title.getBoundingClientRect().right;
+    title.style.setProperty('--sums-end', Math.max(0, Math.round(title.getBoundingClientRect().right - bar.getBoundingClientRect().right)) + 'px');
+    // the weather tile just above the time and date
+    const clock = title.querySelector('.hcHomeClock');
+    if (clock) title.style.setProperty('--wx-above', Math.round(title.getBoundingClientRect().bottom - clock.getBoundingClientRect().top + 8) + 'px');
+    // …and clear of the page's pencil, which sits up there too
+    const wx = title.querySelector('.hcHomeWx'), pen = $('dashEditNav')?.getBoundingClientRect();
+    if (wx) {
+      const end = right - bar.getBoundingClientRect().right, r = wx.getBoundingClientRect(), top = title.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(title).getPropertyValue('--wx-above')) || 40) - r.height;
+      const hits = pen?.width && pen.bottom > top && pen.top < top + r.height;
+      // (an area's page keeps it where Home has it, though its pencil isn't there)
+      if (!app.classList.contains('hcAreaHome')) homeWxEnd = Math.round(hits ? Math.max(end, right - pen.left + 12) : end);
+      title.style.setProperty('--wx-end', (app.classList.contains('hcAreaHome') && homeWxEnd != null ? homeWxEnd : Math.round(hits ? Math.max(end, right - pen.left + 12) : end)) + 'px');
+    }
+  }
   const areaHead = (x, order) => '<div class="settingsHeader tfAreaHead" data-tf data-k="areahead" style="order:' + order + '">' +
     '<button class="back" type="button" data-area-back aria-label="Back to the house">' + BACK + '</button><div class="settingsTitle">' + esc(x.name) + '</div>' +
+    // the Weather page: the time and date in the middle, the title's size in a thinner type (Matt, 26 Nov)
+    (x.key === 'weather' ? '<div class="settingsTitle hcWxClock" data-wx-clock>' + esc(wxClock()) + '</div>' : '') +
     // an area's page edits its card (Matt, 23 Nov: "You should edit the area card by going to the area page itself")
     (x.room ? (aceArea === x.room.id ? '<button class="primary hcAceToggle" type="button" data-ace-toggle>Done</button>' : '<button class="pill hcAceToggle" type="button" data-ace-toggle>Edit area card</button>') : '') + '</div>';
   // a room's Go opens its section's page at its top; back returns to the house exactly where
@@ -4276,7 +4445,25 @@ export function mountTestFocus(root, { config, getHass }) {
   let leftAt = 0, leftTop = null; // how far the house was scrolled when a page opened, and where its opener was on screen
   // the card a page opened from: the weather card or the areas
   const openerOf = (key) => (key === 'weather' ? dashBoxes.wx : (key.startsWith('room:') && grid.querySelector('.tfRoomTile[data-k="' + CSS.escape(key) + '"]')) || grid.querySelector('.tfAreas'));
+  /* between Home and an area's page, only what's under the head changes, and gently (Matt, 26 Nov: "I want stuff to
+     gently fade in and out"): it fades out, the page is drawn, and the new content fades in */
+  function swapFade(go) {
+    if (!overview || reduced()) { go(); return; }
+    app.classList.remove('hcSwapIn');
+    app.classList.add('hcSwapOut');
+    setTimeout(() => {
+      go();
+      app.classList.remove('hcSwapOut');
+      void app.offsetWidth;
+      app.classList.add('hcSwapIn');
+      setTimeout(() => app.classList.remove('hcSwapIn'), 420);
+    }, 170);
+  }
   function openArea(key) {
+    if (overview && key.startsWith('room:') && !areaPage) { swapFade(() => openAreaNow(key)); return; }
+    openAreaNow(key);
+  }
+  function openAreaNow(key) {
     if (!areaPage) { leftAt = scroller().scrollTop; leftTop = openerOf(key)?.getBoundingClientRect().top ?? null; }
     areaPage = key;
     if (key.startsWith('room:')) activeArea = key.slice(5);
@@ -4303,6 +4490,10 @@ export function mountTestFocus(root, { config, getHass }) {
     fix();
   }
   function closeArea() {
+    if (overview && areaPage?.startsWith('room:')) { swapFade(closeAreaNow); return; }
+    closeAreaNow();
+  }
+  function closeAreaNow() {
     aceArea = null; acePick = null;
     const key = areaPage;
     areaPage = null;
@@ -5544,6 +5735,21 @@ export function mountTestFocus(root, { config, getHass }) {
     grid.addEventListener('pointerdown', homeDown);
     grid.addEventListener('scroll', (ev) => { if (ev.target.classList?.contains('hcSchedList') || ev.target.classList?.contains('hcFadeList')) schedFade(ev.target); }, true);
     grid.addEventListener('click', (ev) => { if (overview && homeEditing && ev.target.closest('.tfBoardItem')) { ev.preventDefault(); ev.stopPropagation(); } }, true);
+    grid.addEventListener('click', (ev) => { if (ev.target.closest('[data-hc-home-wx]') && !homeEditing) openArea('weather'); });
+    // the empty dashboard's note: edit mode, on the tray's Cards tab, everything that can be added
+    grid.addEventListener('click', (ev) => {
+      if (!ev.target.closest('[data-dash-empty]') || editing) return;
+      setEditing(true);
+      trayTab = 'cards';
+      showTrayTab(false);
+      if (grid.clientWidth < 2 * PEG + PEG_GAP) trayPage(tray, 'Edit custom dashboard', 'cards', TRAY_TABS.find(([k]) => k === 'cards')[1]); // a phone: straight to the Cards page
+      // what can be added jumps and wiggles once, to say pick me up and put me there (Matt, 26 Nov)
+      if (!reduced()) setTimeout(() => {
+        const cards = [...tray.querySelectorAll('.tfTraySection:not([hidden]) .tfTrayCard')];
+        cards.forEach((c, i) => { c.style.setProperty('--jig-i', i); c.classList.remove('hcJiggle'); void c.offsetWidth; c.classList.add('hcJiggle'); });
+        setTimeout(() => cards.forEach((c) => c.classList.remove('hcJiggle')), 2200);
+      }, 350);
+    });
     // the dashboard's bottom row holds as many tiles as fit, and its rows are measured again as the page changes size
     new ResizeObserver(() => { if (app.classList.contains('tfDash') && dashCols() !== dashColsSeen) refresh(); else queueFit(); }).observe(grid);
     window.addEventListener('resize', queueFit, { passive: true });
@@ -5569,6 +5775,8 @@ export function mountTestFocus(root, { config, getHass }) {
     // Home (the overview) or Dashboards (the board you edit): the same view, its own cards
     get overview() { return overview; },
     // the Areas lab page (#/areas) or Dashboards: the same board, the lab's own cards and layout
+    // HomeCore settings drawn again (its lights' list, after a search or another grouping)
+    resync() { syncSettings(); },
     get lab() { return AREAS_LAB; },
     setLab(on) {
       if (AREAS_LAB === on) return;

@@ -274,8 +274,23 @@ export function mountDemoShell(root, { getHass, homecore }) {
       const KEY = 'homecore-demo-light-view';
       let view = 'cards';
       try { view = localStorage.getItem(KEY) || 'cards'; } catch (_e) { /* cards */ }
-      lights.insertAdjacentHTML('afterbegin', '<div class="hcLightView"><div class="themeChoice" role="group" aria-label="Show lights as">' +
-        '<button class="wxLayoutBtn" type="button" data-light-view="cards">Cards</button><button class="wxLayoutBtn" type="button" data-light-view="table">Table</button></div></div>');
+      // the Devices page's toolbar (Matt, 26 Nov): Filters, a search, grouping, sorting, then Table or Cards as icons
+      const LIST_KEY = 'homecore-demo-light-list';
+      let list = { q: '', group: 'area', sort: 'name' };
+      try { list = { ...list, ...JSON.parse(localStorage.getItem(LIST_KEY) || '{}') }; } catch (_e) { /* the defaults */ }
+      const count = Object.keys(getHass()?.states || {}).filter((id) => id.startsWith('light.')).length;
+      lights.insertAdjacentHTML('afterbegin', '<div class="hcToolbar hcLightView">' +
+        '<button class="hcBtn" type="button" data-oops>' + icon('mdi:filter-variant') + 'Filters</button>' +
+        '<label class="hcSearch">' + icon('mdi:magnify') + '<input class="addInput" type="search" placeholder="Search ' + count + ' lights" aria-label="Search lights" data-light-q></label>' +
+        '<select class="settingsSelect" data-light-group aria-label="Group by"><option value="area">Group by room</option><option value="none">No grouping</option></select>' +
+        '<select class="settingsSelect" data-light-sort aria-label="Sort by"><option value="name">Sort by name</option><option value="area">Sort by room</option><option value="on">On first</option></select>' +
+        '<div class="tfSeg hcViewSeg" role="group" aria-label="Show lights as">' +
+        '<button type="button" data-light-view="table" title="Table" aria-label="Table">' + icon('mdi:format-list-bulleted') + '</button><button type="button" data-light-view="cards" title="Cards" aria-label="Cards">' + icon('mdi:view-grid-outline') + '</button></div></div>');
+      const bar = lights.querySelector('.hcLightView');
+      bar.querySelector('[data-light-q]').value = list.q; bar.querySelector('[data-light-group]').value = list.group; bar.querySelector('[data-light-sort]').value = list.sort;
+      const keep = () => { try { localStorage.setItem(LIST_KEY, JSON.stringify(list)); } catch (_e) { /* this visit only */ } homecore.resync?.(); };
+      bar.addEventListener('input', (ev) => { if (ev.target.matches('[data-light-q]')) { list.q = ev.target.value; keep(); } });
+      bar.addEventListener('change', (ev) => { if (ev.target.matches('[data-light-group]')) { list.group = ev.target.value; keep(); } if (ev.target.matches('[data-light-sort]')) { list.sort = ev.target.value; keep(); } });
       const show = (v) => {
         view = v;
         pane.classList.toggle('hcLightCards', v === 'cards');

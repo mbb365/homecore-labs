@@ -8,10 +8,27 @@
 import { pixelIcons } from './pixel-icons.js';
 
 const KEY = 'homecore-demo-look', IMG_KEY = 'homecore-demo-look-image';
-const BLANK = { card: null, opacity: 100, bg: 'theme', bgColour: null, stroke: null, strokeOpacity: null, imgLum: null,
+const BLANK = { card: null, opacity: 100, bg: 'dynamic', gradient: 'dawn', bgColour: null, stroke: null, strokeOpacity: null, imgLum: null,
   strokes: 'system', strokeWidth: 1, mono: false, icons: 'standard', iconMono: false, corners: 'round', dashOnly: false };
-// a setting saved before 11 Nov: transparency, turned round
-const migrate = (v) => { if (v.strokeClear != null && v.strokeOpacity == null) v.strokeOpacity = 100 - v.strokeClear; delete v.strokeClear; return v; };
+// a setting saved before 11 Nov: transparency, turned round; and before 26 Nov the theme's background was the start, now
+// the dynamic one is (Matt, 26 Nov: "by default make the background… dynamic… to the person's time zone")
+const migrate = (v) => {
+  if (v.strokeClear != null && v.strokeOpacity == null) v.strokeOpacity = 100 - v.strokeClear; delete v.strokeClear;
+  if (!v.dyn26) { if (!v.bg || v.bg === 'theme') v.bg = 'dynamic'; v.dyn26 = true; }
+  return v;
+};
+/* soft gradient backgrounds with a dark grain over them (Matt, 26 Nov: "a couple of very soft gradients themed backgrounds
+   as defaults… lots of dark textures… grainy"): three washes and the ground under them. Dynamic picks one by the time of
+   day where you are: Dawn 5 to 8, Day 8 to 17, Dusk 17 to 21, Night after */
+const GRADS = {
+  dawn: { name: 'Dawn', c: ['#f1cbb6', '#d7c0dc', '#c1d1e3'], g: '#e2ccd0' },
+  day: { name: 'Day', c: ['#cddfee', '#ebe0cb', '#bcd5e0'], g: '#d8e0e3' },
+  dusk: { name: 'Dusk', c: ['#e0b3a0', '#a596b8', '#6c7593'], g: '#ae9fae', light: true },
+  night: { name: 'Night', c: ['#2d3556', '#3f3556', '#141a2b'], g: '#252a3e', light: true },
+};
+const dynGrad = () => { const h = new Date().getHours(); return h >= 5 && h < 8 ? 'dawn' : h >= 8 && h < 17 ? 'day' : h >= 17 && h < 21 ? 'dusk' : 'night'; };
+const GRAIN = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'220\' height=\'220\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'.9\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3CfeColorMatrix values=\'0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .45 -.2\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")';
+const gradBg = (k) => { const { c, g } = GRADS[k]; return GRAIN + ' 0 0/220px 220px,radial-gradient(120% 90% at 8% 0%,' + c[0] + ',transparent 62%),radial-gradient(110% 90% at 100% 18%,' + c[1] + ',transparent 60%),radial-gradient(120% 100% at 45% 110%,' + c[2] + ',transparent 66%),' + g; };
 const INK = { dark: ['#26221e', '#6a625a'], light: ['#d9d9d9', '#969696'] };
 // everything painted in the card colour (every rule with background: var(--card), --card2, --modal or --group-bg), so
 // the text in any of them follows the card; Settings' .card is only a wrapper on the background, so it doesn't count
@@ -51,6 +68,7 @@ export function mountLook(root, { toast }) {
   try { s = migrate({ ...BLANK, ...JSON.parse(read(KEY, '{}')) }); } catch (_e) { /* the theme */ }
   img = read(IMG_KEY, null);
   if (s.bg === 'image' && !img) s.bg = 'theme';
+  const gradOf = () => (s.bg === 'dynamic' ? dynGrad() : s.bg === 'gradient' ? (GRADS[s.gradient] ? s.gradient : 'dawn') : null);
   const style = document.createElement('style');
   root.appendChild(style);
 
@@ -67,11 +85,12 @@ export function mountLook(root, { toast }) {
     style2();
     if (!on) { style.textContent = ''; draw(); return; }
     const card = s.card ? hexRgb(s.card) : t.card.slice(0, 3), a = s.opacity / 100;
-    const ground = s.bg === 'colour' && s.bgColour ? hexRgb(s.bgColour) : t.ground.slice(0, 3);
+    const grad = gradOf(), ground = grad ? hexRgb(GRADS[grad].g) : s.bg === 'colour' && s.bgColour ? hexRgb(s.bgColour) : t.ground.slice(0, 3);
     const groundLum = s.bg === 'image' && s.imgLum != null ? s.imgLum : lum(ground);
     // what the card looks like over the background, for its text
     const seen = s.bg === 'image' && s.imgLum != null ? lum(card) * a + s.imgLum * (1 - a) : lum(mix(ground, card, a));
-    const [text, muted] = inkFor(seen), [pageText, pageMuted] = inkFor(groundLum);
+    // the page's own words white at dusk and at night (Matt, 26 Nov: "at a time like this… in-between… white text")
+    const [text, muted] = inkFor(seen), [pageText, pageMuted] = grad && GRADS[grad].light ? ['#ffffff', 'rgba(255,255,255,.78)'] : inkFor(groundLum);
     const tile = mix(card, hexRgb(text), 0.07);
     // tiles on the page itself (a page's search and buttons): from the background, or see-through over an image
     const pageTile = s.bg === 'image' ? (pageText === INK.dark[0] ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.35)') : rgbHex(mix(ground, hexRgb(pageText), 0.07));
@@ -95,6 +114,9 @@ export function mountLook(root, { toast }) {
       '#app.hcDemo.hcLook #settingsView .hcLookPreview{--card:' + rgba(card, a) + ';--group-bg:' + rgba(card, a) + ';--line:' + rgba(line, lineA) + ';--lineb:' + rgba(line, lineA) +
         (s.bg !== 'theme' ? ';--bg:' + rgbHex(ground) + ';--page:' + rgbHex(ground) : '') + '}' +
       (s.bg === 'image' && img ? '#app.hcDemo.hcLook .hcLookPreview{background-image:url("' + img + '");background-size:cover;background-position:center;background-attachment:fixed}' : '') +
+      // a gradient: the page's, under its own sky on the Weather page, and the preview's
+      (grad ? ON + ':not(.tfWeatherOpen) .shell{background:' + gradBg(grad) + ';background-attachment:fixed}' + ON + ' .hcRail{background:transparent}' +
+        '#app.hcDemo.hcLook .hcLookPreview{background:' + gradBg(grad) + '}' : '') +
       // every card's own line, drawn over whatever the system gives it; edit mode's outline and a focus ring come first
       // (one card being edited shows the lines as they'll be)
       (s.strokes === 'all' ? '#app.hcDemo.hcLook:is(:not(.tfEditing),.hcCardEditing):not(.hcLookOff) :is(' + SURFACES + ')' + SCOPE + ':not(:focus-visible),' + PV + ' :is(' + SURFACES + '):not(:focus-visible){outline:' + s.strokeWidth + 'px solid ' + rgba(line, lineA) + ';outline-offset:-' + s.strokeWidth + 'px}' : '');
@@ -143,10 +165,11 @@ export function mountLook(root, { toast }) {
       '<span class="tfBar pos hcLookBar" role="slider" tabindex="0" aria-label="' + label + '" aria-valuemin="0" aria-valuemax="100" data-look-bar="' + k + '"><i></i></span></span>';
     // a row's controls side by side under its name: a choice and the colour that goes with it
     const pair = (...parts) => '<span class="hcRowControls">' + parts.join('') + '</span>';
-    look.insertAdjacentHTML('beforeend', '<div class="hcLookPreview" aria-label="Preview" inert></div>' +
+    look.insertAdjacentHTML('beforeend', '<div class="hcLookPreview" aria-label="Preview" inert></div><div class="hcLookControls">' +
     '<div class="tfSetGroup"><div class="toggleList hcLookList"><div class="hcCardTitle">Cards and background</div>' +
       row('Cards', 'Their colour, and how much of the background shows through. Text turns light or dark to suit.', pair(swatch('card', 'Card colour'), range('opacity', 'Card opacity'))) +
-      row('Background', 'A colour, or a photo or picture of your own, kept in this browser.', pair('<div class="themeChoice" role="group" aria-label="Background">' + [['theme', 'Theme'], ['colour', 'Colour'], ['image', 'Image']].map(([v, t]) => '<button class="wxLayoutBtn" type="button" data-look-bg="' + v + '">' + t + '</button>').join('') + '</div>',
+      row('Background', 'Dynamic follows the time of day where you are. Or a gradient, a colour, or a photo or picture of your own, kept in this browser.', pair('<div class="themeChoice" role="group" aria-label="Background">' + [['dynamic', 'Dynamic'], ['gradient', 'Gradient'], ['theme', 'Theme'], ['colour', 'Colour'], ['image', 'Image']].map(([v, t]) => '<button class="wxLayoutBtn" type="button" data-look-bg="' + v + '">' + t + '</button>').join('') + '</div>',
+        '<span class="hcLookGrads" data-look-show="gradient">' + Object.entries(GRADS).map(([k, x]) => '<button class="hcLookGrad" type="button" data-look-grad="' + k + '" aria-label="' + x.name + '" title="' + x.name + '" style="background:' + gradBg(k).replace(/"/g, '&quot;') + '"></button>').join('') + '</span>',
         '<span data-look-show="colour">' + swatch('bgColour', 'Background colour') + '</span>',
         '<span class="hcLookImg" data-look-show="image"><button class="hcBtn" type="button" data-look-pick>Choose image</button><input type="file" accept="image/*" hidden data-look-file></span>')) +
       row('Strokes', 'System is the fine line the design gives some cards. All cards puts a line round every one.', pair(choice('strokes', 'Strokes', [['system', 'System'], ['all', 'All cards']]), swatch('stroke', 'Stroke colour'))) +
@@ -160,7 +183,7 @@ export function mountLook(root, { toast }) {
       row('Corners', '', choice('corners', 'Corners', [['round', 'Round'], ['square', 'Square']])) +
       row('Dashboards only', 'The style shows on the house page and the area pages. Everywhere else keeps the theme.', '<button class="switch" type="button" role="switch" data-look-switch="dashOnly" aria-label="Dashboards only"></button>') +
       row('Back to the theme', 'Cards, background, strokes and style.', '<button class="pill" type="button" data-look-reset>Reset</button>') +
-    '</div></div>');
+    '</div></div></div>');
   }
   const list = look;
   const CHOICES = ['strokes', 'strokeWidth', 'mono', 'icons', 'iconMono', 'corners'];
@@ -176,6 +199,7 @@ export function mountLook(root, { toast }) {
     list.querySelector('[data-look-row="width"]').hidden = s.strokes !== 'all';
     list.querySelectorAll('[data-look-switch]').forEach((b) => { const on = Boolean(s[b.dataset.lookSwitch]); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
     list.querySelectorAll('[data-look-show]').forEach((el) => { el.hidden = el.dataset.lookShow !== s.bg; });
+    list.querySelectorAll('[data-look-grad]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lookGrad === (GRADS[s.gradient] ? s.gradient : 'dawn'))));
     list.querySelector('[data-look-pick]').textContent = img ? 'Change image' : 'Choose image';
   }
   if (list) {
@@ -219,6 +243,8 @@ export function mountLook(root, { toast }) {
         save();
         return;
       }
+      const gr = ev.target.closest('[data-look-grad]');
+      if (gr) { s.gradient = gr.dataset.lookGrad; s.bg = 'gradient'; save(); return; }
       if (ev.target.closest('[data-look-pick]')) { file.click(); return; }
       const sw = ev.target.closest('[data-look-switch]');
       if (sw) { s[sw.dataset.lookSwitch] = !s[sw.dataset.lookSwitch]; save(); return; }
@@ -230,7 +256,7 @@ export function mountLook(root, { toast }) {
         save();
         return;
       }
-      if (ev.target.closest('[data-look-reset]')) { s = { ...BLANK }; img = null; write(IMG_KEY, null); save(); }
+      if (ev.target.closest('[data-look-reset]')) { s = { ...BLANK, dyn26: true }; img = null; write(IMG_KEY, null); save(); }
     });
     // an image: made no bigger than 2400 across, its brightness measured for the text on it
     file.addEventListener('change', () => {
@@ -262,7 +288,9 @@ export function mountLook(root, { toast }) {
      Thermostat and Air quality, or others like them if those are gone), taken each time the tab opens, sized as at M;
      they can't be used. It stays at the top as the controls scroll under it */
   const preview = look?.querySelector('.hcLookPreview'), stylePane = root.querySelector('[data-house-pane="style"]'), settings = root.getElementById('settingsView');
-  const PICKS = [['[data-k="light.office_2"]', '.tfAction[data-k^="light."]'], ['[data-k="climate.made_up_living_room"]', '.tfAction[data-k^="climate."]'], ['.tfDash-aq', '.tfDash-pollen', '.tfDash-wx']];
+  // (26 Nov: beside the controls, in a window of its own on the background: Home's Favourites and an area's card, or a
+  // light and the thermostat from a dashboard)
+  const PICKS = [['.tfDash-favs', '[data-k="light.office_2"]', '.tfAction[data-k^="light."]'], ['.tfRoomTile[data-k="room:living_room"]', '.tfRoomTile', '[data-k="climate.made_up_living_room"]', '.tfAction[data-k^="climate."]']];
   function fillPreview() {
     const home = root.getElementById('homeView');
     if (!preview || !home || !stylePane?.classList.contains('active') || !settings?.classList.contains('active')) return;
@@ -275,7 +303,7 @@ export function mountLook(root, { toast }) {
       c.removeAttribute('id');
       c.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
       c.classList.remove('tfDragging', 'mvDrag');
-      Object.assign(c.style, { position: 'relative', left: '', top: '', transform: '', width: '216px', height: rows * 76 - 16 + 'px' });
+      Object.assign(c.style, { position: 'relative', left: '', top: '', transform: '', translate: '', width: '100%', height: el.classList.contains('tfDash-favs') ? 'auto' : (el.offsetHeight || rows * 76 - 16) + 'px' });
       return c;
     }));
   }
@@ -294,5 +322,8 @@ export function mountLook(root, { toast }) {
     img = read(IMG_KEY, null);
     apply();
   });
+  // Dynamic: the time of day moves on
+  let gradWas = gradOf();
+  setInterval(() => { const g = gradOf(); if (s.bg === 'dynamic' && g !== gradWas) { gradWas = g; apply(); } }, 60000);
   apply();
 }

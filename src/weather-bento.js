@@ -404,7 +404,7 @@ let mounts=0;
 
 // cards: only these cards (the dashboard places the weather card, Compared to average and Humidity on their own);
 // onOpen: the weather card's Now becomes a button that calls it (the dashboard opens its Weather page)
-export function mountWeatherBento(container,{getHass,entityId,style='bitmap',motion=true,cards,onOpen,hoursWindow}={}){
+export function mountWeatherBento(container,{getHass,entityId,style='bitmap',motion=true,cards,onOpen,hoursWindow,ambient=false}={}){
   const P='wb'+(++mounts)+'-';   // SVG ids, unique in the shadow root
   const root=document.createElement('div');
   root.className='wb';
@@ -412,6 +412,19 @@ export function mountWeatherBento(container,{getHass,entityId,style='bitmap',mot
   const bento=document.createElement('div');
   bento.className='wbBento';
   root.appendChild(bento);
+  /* the Weather page's own sky (Matt, 26 Nov: "more ambient… the background to be more reactive to what the actual
+     weather conditions are… some dirty gradients and some graining"; windy: "a few things moving across the screen, like
+     the pollen"): slow blurred washes in the weather's colours, grain over them, and streaks and leaves on a windy day.
+     ?sky=rainy (or any condition) tries another sky */
+  const sky=ambient?document.createElement('div'):null;
+  if(sky){
+    root.classList.add('wbAmbient');
+    sky.className='wbAmbientSky';sky.setAttribute('aria-hidden','true');
+    sky.innerHTML='<i class="wbWash wbWash1"></i><i class="wbWash wbWash2"></i><i class="wbWash wbWash3"></i><i class="wbGrainLayer"></i>';
+    root.prepend(sky);
+    // the wind crosses over the page, cards and all, so it's seen
+    const air=document.createElement('div');air.className='wbWindAir';air.setAttribute('aria-hidden','true');root.append(air);
+  }
   container.replaceChildren(root);
   // a tile's graph opens in a popup window over the page (Matt, 16 Nov: "the sun opens a popup graph window", not the
   // tile turning into a graph card). It lives in the app, beside the card, so nothing round the tile holds it in
@@ -423,19 +436,41 @@ export function mountWeatherBento(container,{getHass,entityId,style='bitmap',mot
   const BASE_CARDS=['aq_tile','pollen_tile','radar_tile'];
   // three rows (Matt, 9 Nov): 1 the forecast, the days, Sun and Pollen; 2 Moon, UV, Air quality, Humidity, Pressure and
   // Wind; 3 Visibility, Rain radar and Compared to average (then anything else that shows)
-  const CARDS=['current','hourly','sun','pollen_tile','moon','uv_index','aq_tile','humidity','pressure','wind','visibility','radar_tile','compared_to_average','precipitation','air_quality']
+  // the ambient Weather page shows Next hours and Next days both (Matt, 26 Nov: the days under the forecast, the hours
+  // beside it), so Days is its own card there
+  // and no Next hours there (Matt, 26 Nov: "remove the next hours card")
+  const CARDS=['current',...(ambient?['days']:['hourly']),'sun','pollen_tile','moon','uv_index','aq_tile','humidity','pressure','wind','visibility','radar_tile','compared_to_average','precipitation','air_quality']
     .filter(name=>!cards||cards.includes(name));
-  const SIZES={current:'wide',hourly:'wide',compared_to_average:'double'};
+  const SIZES={current:'wide',hourly:'wide',days:'wide',compared_to_average:'double'};
   // XL (5 rows) on the Weather page: the widgets with an action zone, so their callouts show, and Humidity, Pressure and
   // Wind, which share their row (Matt, 9 Nov: one height a row)
   const XL=['sun','moon','uv_index','aq_tile','pollen_tile','humidity','pressure','wind'];
-  const items={};
+  const items={},left=document.createElement('div'),rest=document.createElement('div');
+  if(ambient){left.className='wbLeft';rest.className='wbRest';bento.append(left,rest)}
   CARDS.forEach(name=>{
     const el=document.createElement('div');
     el.className='wbItem';el.dataset.card=name;el.dataset.size=SIZES[name]||'tile';el.hidden=true;
     if(XL.includes(name))el.dataset.xl='';
-    bento.appendChild(el);items[name]={el,html:null};
+    // on the ambient page the forecast and the week are a column of their own on the left, the rest to its right
+    (ambient?(name==='current'||name==='days'?left:rest):bento).appendChild(el);items[name]={el,html:null};
   });
+  /* related widgets share one bigger card on the ambient page (Matt, 26 Nov: "group the particular weather things together
+     more… air quality and pollen… joined together in one bigger card"; an experiment): the sky (Sun, Moon, UV index), the
+     air (Air quality, Pollen, Visibility) and the conditions (Humidity, Pressure, Wind). Rain radar sits beside Next
+     hours, the rain to come; Compared to average after the groups */
+  if(ambient){
+    // and a fourth (Matt, 26 Nov): Compared to average, two wide and a bit taller, with Rain radar beside it; Next hours
+    // as wide as a group, above them, the groups two to a row where there's room
+    const GROUPS=[['sky',['sun','moon','uv_index']],['air',['aq_tile','pollen_tile','visibility']],['conditions',['humidity','pressure','wind']],['rain',['compared_to_average','radar_tile']]];
+    const order=[];
+    GROUPS.forEach(([key,names])=>{
+      const members=names.filter(n=>items[n]);if(!members.length)return;
+      const g=document.createElement('div');g.className='wbGroup';g.dataset.group=key;g.style.setProperty('--g',members.reduce((n,m)=>n+(SIZES[m]==='double'?2:1),0));
+      members.forEach(n=>g.appendChild(items[n].el));order.push(g);
+    });
+    Object.values(items).forEach(it=>{if(it.el.parentNode===rest&&!order.includes(it.el))order.push(it.el)});
+    rest.append(...order.filter(Boolean));
+  }
 
   let destroyed=false,lastKey=null,raf=0,lastStep=-1,queued=false,focusAfter=null,popWas='';
   const VIEW_KEY='homecore-next-view',saved=(()=>{try{return localStorage.getItem(VIEW_KEY)}catch(_e){return null}})();
@@ -765,9 +800,10 @@ export function mountWeatherBento(container,{getHass,entityId,style='bitmap',mot
   }
   function renderHourly(h,src){
     delete strips.hourly;
-    const view=ui.hourlyView==='bars'?'bars':'strip';
-    const head='<div class="wbHeader"><h2 class="wbTitle">'+esc(view==='bars'?T.nextDays:T.nextHours)+'</h2>'+
-      '<div class="wbSegments wbViews" role="group" aria-label="'+esc(T.showAs)+'">'+['strip','bars'].map(v=>'<button aria-pressed="'+(v===view)+'" data-wb="hourly-view" data-view="'+v+'" data-wb-focus="hourly-view-'+v+'">'+esc(T.views[v])+'</button>').join('')+'</div></div>';
+    // on the ambient Weather page it's always the hours here; the days are their own card (Matt, 26 Nov)
+    const view=ambient?'strip':ui.hourlyView==='bars'?'bars':'strip';
+    const head='<div class="wbHeader"><h2 class="wbTitle">'+esc(view==='bars'?T.nextDays:T.nextHours)+'</h2>'+(ambient?'':
+      '<div class="wbSegments wbViews" role="group" aria-label="'+esc(T.showAs)+'">'+['strip','bars'].map(v=>'<button aria-pressed="'+(v===view)+'" data-wb="hourly-view" data-view="'+v+'" data-wb-focus="hourly-view-'+v+'">'+esc(T.views[v])+'</button>').join('')+'</div>')+'</div>';
     if(view==='bars')return renderBars(h,src,head);
     const hours=forecast('hourly'),now=Math.floor(Date.now()/MINUTE)*MINUTE;
     const coming=hours.filter(e=>new Date(e.datetime).getTime()>now-HOUR);
@@ -1211,7 +1247,12 @@ export function mountWeatherBento(container,{getHass,entityId,style='bitmap',mot
     // where the radar's map goes: home in the middle, rings round it
     return tile({icon:I.radar,name:T.rainRadar,sub,cls:'wbBase',visual:'<div class="wbRadar" aria-hidden="true"><i class="wbRadarRing"></i><i class="wbRadarHome"></i></div>'});
   }
-  const RENDER={current:renderCurrent,hourly:renderHourly,sun:renderSun,moon:renderMoon,wind:renderWind,uv_index:renderUv,
+  // titled for how many days it holds: Next 7 days (Matt, 26 Nov)
+  const renderDays=(h,src)=>{
+    const n=Math.min(7,forecast('daily').filter(e=>num(e.templow)&&num(e.temperature)).length);
+    return renderBars(h,src,'<div class="wbHeader"><h2 class="wbTitle">'+esc('Next '+n+' days')+'</h2></div>');
+  };
+  const RENDER={current:renderCurrent,hourly:renderHourly,days:renderDays,sun:renderSun,moon:renderMoon,wind:renderWind,uv_index:renderUv,
     compared_to_average:renderCompared,humidity:renderHumidity,pressure:renderPressure,precipitation:renderPrecipitation,visibility:renderVisibility,air_quality:renderAirQuality,
     aq_tile:renderAqTile,pollen_tile:renderPollenTile,radar_tile:renderRadarTile};
 
@@ -1352,6 +1393,7 @@ export function mountWeatherBento(container,{getHass,entityId,style='bitmap',mot
       if(focused&&!focusAfter)pop.querySelector('[data-wb-focus="'+focused+'"]')?.focus({preventScroll:true});
     }
     drawSunTracks();
+    if(sky)paintAmbient(h,src);
     if(focusAfter){(root.querySelector('[data-wb-focus="'+focusAfter+'"]')||pop.querySelector('[data-wb-focus="'+focusAfter+'"]'))?.focus({preventScroll:true});focusAfter=null} // without scrolling the page (Matt, 9 Nov: no jump)
     // Matt's rows (9 Nov) start where he said, at the dashboard's own column widths (more columns leave space at the
     // end, fewer wrap): the first of Moon and what follows it starts row 2, and the first shorter card starts row 3
@@ -1363,6 +1405,31 @@ export function mountWeatherBento(container,{getHass,entityId,style='bitmap',mot
       it.el.toggleAttribute('data-break',mark);
     }
     paint(performance.now());
+  }
+  // the sky's kind, day or night, and whether it's windy (the condition says so, or the wind's 30 km/h or more)
+  const WIND_GLYPHS=[
+    ['wbStreak','<svg viewBox="0 0 160 24" aria-hidden="true"><path d="M2 14C34 4 62 22 96 12S146 6 158 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path></svg>'],
+    ['wbLeaf','<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17C3 8 9 3 18 2C17 11 12 17 3 17Z" fill="currentColor"></path><path d="M3 17L12 8" fill="none" stroke="var(--bg,#fff)" stroke-opacity=".45" stroke-width=".9" stroke-linecap="round"></path></svg>'],
+    ['wbStreak wbShort','<svg viewBox="0 0 90 16" aria-hidden="true"><path d="M2 10C24 2 48 14 88 6" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></path></svg>'],
+  ];
+  let skyWas='';
+  function paintAmbient(h,src){
+    const primary=primaryOf(h,src);
+    let condition=primary?.state||'cloudy';
+    try{const q=new URLSearchParams(location.search).get('sky');if(q)condition=q}catch(_e){/* no override */}
+    const w=value(h,src,'wind_speed'),unit=String(weatherUnit(h,primary,'wind_speed')||'km/h');
+    const kmh=w&&num(w.value)?Number(w.value)*(/mph/.test(unit)?1.609:/m\/s/.test(unit)?3.6:/kn/.test(unit)?1.852:1):0;
+    const windy=/^windy/.test(condition)||kmh>=30,night=condition==='clear-night'||isNight(h);
+    const kind=SKY_KIND[condition]||(condition==='exceptional'?'storm':'cloudy');
+    const n=windy?Math.min(14,Math.max(7,Math.round(kmh/4))):0,at=kind+(night?':n':'')+':'+n;
+    if(at===skyWas)return;
+    skyWas=at;
+    sky.dataset.sky=kind;sky.toggleAttribute('data-night',night);sky.toggleAttribute('data-windy',windy);
+    root.querySelector(':scope>.wbWindAir').innerHTML=Array.from({length:n},(_,i)=>{
+      const [cls,svg]=WIND_GLYPHS[i%3],dur=6+(i*5)%7,bob=2.2+(i*3)%4*.5;
+      return '<span class="wbFloat '+cls+'" style="top:'+(6+(i*41)%84)+'%;--x:'+((i*29)%90+4)+'%;animation-duration:'+dur+'s;animation-delay:-'+((i*1.9)%dur).toFixed(1)+'s">'+
+        '<span class="wbBob" style="animation-duration:'+bob.toFixed(1)+'s;animation-delay:-'+((i*.6)%bob).toFixed(1)+'s">'+svg+'</span></span>';
+    }).join('');
   }
   function queue(){
     if(queued||destroyed)return;

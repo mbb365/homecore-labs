@@ -439,3 +439,59 @@
 .hcIntroSplit{display:inline-block;white-space:pre}
 .hcIntroLetter{display:inline-block;white-space:pre;transform-origin:50% 60%;animation:hcIntroLetter var(--intro-letter-dur,.45s) var(--intro-letter-ease,ease) both}
 @keyframes hcIntroLetter{from{opacity:0;transform:perspective(300px) rotateX(var(--intro-rx,-100deg)) rotateY(var(--intro-ry,0deg)) translateY(var(--intro-lrise,.25em))}60%{opacity:1}to{opacity:1;transform:none}}
+
+/* ---- HomeCore settings → Lights, as the leadership demo has it (26 Nov) ---- */
+/* HomeCore settings → Lights, as the Devices page: its switch at the top right, the table's chips, the cards as action cards */
+#housePane .hcLightView{display:flex;justify-content:flex-end;margin-bottom:12px}
+#housePane .hcLightView .hcViewSeg{width:100px}
+#housePane .tfLightTable .hcNameCell{display:flex;align-items:center;gap:12px}
+#housePane .tfLightTable .tfIcon{background:var(--hc-icon);color:var(--hc-icon-ink)}
+#housePane .tfLightTable .tfIcon[data-light]{background:var(--light-soft);color:var(--light-ink)}
+#housePane.hcLightCards .tfLightCards{grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+#app #housePane .hcLightCard{gap:14px}
+#app #housePane .hcLightCard .tfIcon{background:var(--hc-icon);color:var(--hc-icon-ink)}
+#app #housePane .hcLightCard.on[data-light] .tfIcon{background:var(--light-soft);color:var(--light-ink)}
+#app #housePane .hcLightCard .tfName{display:grid;min-width:0}
+#app #housePane .hcLightRows{display:flex;flex-direction:column;gap:8px;padding:0;background:none;box-shadow:none}
+#app #housePane .hcLightRows>.toggleRow{min-height:46px;padding:4px 6px 4px 14px;border-radius:16px;background:var(--tile)}
+#app #housePane .tfLightCards>.hcLightCard{grid-column:auto} /* (an action card spans two of a board's columns; here each is one card of the grid) */
+/* the light table keeps the Devices table's look but not its fixed columns: its columns as wide as what's in them, so the
+   Tile and Pad lists show whole (Matt, 26 Nov: "it chops off… the drop down things"); sideways if the pane is narrower */
+#housePane .tfLightTable.hcDevTable{table-layout:auto;width:100%}
+#housePane .tfLightTable.hcDevTable :is(th,td){width:auto!important;overflow:visible;text-overflow:clip}
+#housePane .tfLightTable.hcDevTable td:first-child{min-width:200px}
+#housePane .tfLightTable .settingsSelect{min-width:170px}
+#housePane [data-house-pane="lights"] .metaTableWrap{overflow-x:auto}
+/* the Lights tab's toolbar, as the Devices page's; its groups headed with their counts */
+#housePane .hcLightView.hcToolbar{justify-content:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+#housePane .hcLightView .hcViewSeg{margin-left:auto}
+.hcLightGroup{grid-column:1/-1;margin:8px 0 -4px;font:500 18px/1.2 var(--font-tile);letter-spacing:-.01em;color:var(--text)}
+.hcLightGroup span,.hcLightGroupRow span{color:var(--muted);font-weight:400}
+#housePane .tfLightTable .hcLightGroupRow th{padding:18px 8px 6px;text-align:left;font:500 16px/1.2 var(--font-tile);text-transform:none;letter-spacing:0;color:var(--text)}
+.hcLightNone{padding:16px 8px;color:var(--muted)}
+/* the Lights tab's groups as the Devices page's: a name and count, then a card with its table (or its cards); tables or
+   cards, never both */
+#housePane.hcLightCards #lightTables,#housePane:not(.hcLightCards) #lightCards{display:none}
+#housePane #lightCards{display:grid;gap:24px}
+#housePane #lightTables .hcTableCard .metaTableWrap{display:block}
+#housePane .hcLightGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+#app #housePane .hcLightGrid>.hcLightCard{grid-column:auto}
+@container housepane (width < 720px){#housePane:not(.hcLightCards) #lightTables{display:none}#housePane:not(.hcLightCards) #lightCards{display:grid}}
+/* the light tables on cards as the Devices page's (settings makes its cards see-through): the card colour, its corners, 10 in, its hairline */
+#app #housePane #lightTables .hcTableCard{background:var(--card);border-radius:var(--r-card);padding:var(--inset);box-shadow:var(--hc-hair)}
+#app #housePane #lightTables .hcGroup>.sectionLabel{margin:0 18px}
+
+/* ---- Style: the preview a window of its own beside the controls (Matt, 26 Nov: "a window to the right hand side… a
+   couple of cards and a background… remove that from the top"); the gradients' swatches ---- */
+#housePane [data-house-pane="style"]>.card{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:24px;align-items:start}
+#housePane .hcLookControls{grid-column:1;grid-row:1;min-width:0}
+#app #housePane .hcLookPreview{grid-column:2;grid-row:1;position:sticky;top:24px;display:flex;flex-direction:column;flex-wrap:nowrap;gap:16px;min-height:460px;padding:24px;box-sizing:border-box;border-radius:32px;background-color:var(--page);box-shadow:0 0 0 1px color-mix(in srgb,var(--text) 14%,transparent),0 16px 48px rgba(0,0,0,.18);overflow:hidden}
+#app #housePane .hcLookPreview>*{flex:none;max-width:100%}
+@container housepane (width < 820px){
+  #housePane [data-house-pane="style"]>.card{grid-template-columns:1fr}
+  #app #housePane .hcLookPreview{grid-column:1;grid-row:1;position:relative;top:0;min-height:0}
+  #housePane .hcLookControls{grid-row:2}
+}
+.hcLookGrads{display:flex;align-items:center;gap:8px}
+.hcLookGrad{width:32px;height:32px;padding:0;border:0;border-radius:50%;box-shadow:inset 0 0 0 1px var(--line);cursor:pointer}
+.hcLookGrad[aria-pressed="true"]{outline:2px solid var(--primary);outline-offset:2px}
