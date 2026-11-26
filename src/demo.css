@@ -521,5 +521,9 @@
 .hcHomeMenu[hidden]{display:none}
 @media (min-width:621px){#app:not(.tfEditing):not(.hcHomeEditing) #dashEditNav{display:none!important}}
 /* the bar a little fatter, its edges feathered into the page (Matt, 26 Nov: "a bit fatter… feather the edge of it") */
-#app.hcRailAuto .hcRailHint{-webkit-mask-image:linear-gradient(180deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(180deg,transparent,#000 8%,#000 92%,transparent)}
+/* feathered along its long sides instead of its ends (Matt, 26 Nov: "the feathering along the whole side… no hard line on the
+   long vertical axes"): a soft glow, the full height, fading out to either side */
+#app.hcRailAuto .hcRailHint{left:0;top:0;bottom:0;width:64px;border-radius:0;filter:blur(10px);opacity:.08;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 25%,#000 30%,transparent);mask-image:linear-gradient(90deg,transparent,#000 25%,#000 30%,transparent)} /* fainter and spread wider (Matt, 26 Nov: "way softer") */
+#app.hcRailAuto .hcRailHint::after{display:none}
 #app.hcRailAuto .hcRailHint::after{left:4px;width:4px}
